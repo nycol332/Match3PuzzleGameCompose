@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.match3puzzlegame.ui.theme.Match3PuzzleGameTheme
 import kotlin.math.abs
+import androidx.compose.animation.core.Animatable // Pentru animație detaliată
+import androidx.compose.animation.core.tween // Specifică durata animației
+import androidx.compose.ui.graphics.graphicsLayer // Pentru a aplica scale și alpha
 
 // --- Constante ---
 const val ROWS = 8
@@ -72,13 +75,15 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun GameScreen() {
     var score by remember { mutableStateOf(0) }
+
     var feedbackMessage by remember { mutableStateOf("") }
 
-
-
-    // --- Starea pentru Selecție --- *NOU*
     var selectedTilePos by remember { mutableStateOf<TilePosition?>(null) }
+
+    var tilesBeingMatched by remember { mutableStateOf<Set<TilePosition>>(emptySet()) }
+
     var isProcessing by remember { mutableStateOf(false) }
+
     val scope = rememberCoroutineScope()
     // Optimizare stare derivată pentru butonul meta
     val isMetaButtonEnabled = remember(score) { score >= META_COST }
@@ -240,7 +245,7 @@ fun GameScreen() {
                 }
                 break // Ieși din bucla while dacă nu mai sunt potriviri
             }
-
+            tilesBeingMatched = matches
             cascadeCount++
             Log.d(TAG, "Cascade $cascadeCount: Found ${matches.size} matched tiles.")
 
@@ -259,29 +264,38 @@ fun GameScreen() {
             }
 
             // --- 2. Animație dispariție & Actualizare UI ---
-            delay(350L) // Așteaptă vizual dispariția (timp similar cu animația CSS)
-            board = boardWithEmptyTiles // Actualizează starea principală PENTRU a arăta spațiile goale
-            currentBoard = boardWithEmptyTiles // Continuăm procesarea de la această stare
+            delay(400L) // Așteaptă vizual dispariția (timp similar cu animația CSS)
+
+            val boardAfterMatch = currentBoard.map { it.toMutableList() }
+            matches.forEach { pos ->
+                if (pos.row in 0 until ROWS && pos.col in 0 until COLS) {
+                    boardAfterMatch[pos.row][pos.col] = EMPTY_TILE
+                }
+            }
+            tilesBeingMatched = emptySet()
+            board = boardAfterMatch // Actualizează starea principală PENTRU a arăta spațiile goale
+            currentBoard = boardAfterMatch // Continuăm procesarea de la această stare
+
+
 
             // --- 3. Aplică Gravitația ---
             val boardAfterGravity = applyGravityToBoard(currentBoard) // Funcție nouă care returnează tabla modificată
 
-            // --- 4. Animație cădere & Actualizare UI ---
-            delay(300L) // Așteaptă vizual căderea
-            board = boardAfterGravity // Actualizează starea principală PENTRU a arăta piesele căzute
+            delay(300L)
+            board = boardAfterGravity
             currentBoard = boardAfterGravity
 
-            // --- 5. Umple spațiile goale ---
+
+
+            // ---  Umple spațiile goale ---
             val boardAfterFill = fillEmptyTilesOnBoard(currentBoard) // Funcție nouă care returnează tabla modificată
 
-            // --- 6. Animație apariție & Actualizare UI ---
-            delay(300L) // Așteaptă vizual apariția pieselor noi
-            board = boardAfterFill // Actualizează starea principală finală pentru această iterație
+            delay(300L)
+            board = boardAfterFill
             currentBoard = boardAfterFill
 
-            // Bucla while va continua și va reapela findMatchesOnBoard cu currentBoard actualizat
-        } // Sfârșit while
-    } // Sfârșit processMatchesAndCascades
+        }
+    }
 
 
 
@@ -375,6 +389,7 @@ fun GameScreen() {
         GameBoard(
             board = board,
             selectedTilePosition = selectedTilePos,
+            tilesBeingMatched = tilesBeingMatched,
             onTileClick = { row, col ->
                 if (isProcessing) { // *ADAUGAT*
                     Log.d(TAG, "Click ignorat - procesare în curs")
@@ -413,6 +428,7 @@ fun GameScreen() {
                 }
             }
         )
+        Log.d(TAG, "GameBoard composition finished")
     }
 }
 
@@ -421,7 +437,8 @@ fun GameScreen() {
 @Composable
 fun GameBoard(
     board: List<List<Int>>,
-    selectedTilePosition: TilePosition?, // Primește poziția selectată *MODIFICAT*
+    selectedTilePosition: TilePosition?,
+    tilesBeingMatched: Set<TilePosition>,
     onTileClick: (row: Int, col: Int) -> Unit
 ) {
     BoxWithConstraints(
@@ -431,6 +448,7 @@ fun GameBoard(
             .background(Color(0xFFA0A0A0))
             .padding(4.dp)
     ) {
+
         val tileSize = maxWidth / COLS
         Column {
             board.forEachIndexed { rowIndex, rowData ->
@@ -439,12 +457,20 @@ fun GameBoard(
                         val currentPos = TilePosition(rowIndex, colIndex)
                         // Verifică dacă piesa curentă este cea selectată *MODIFICAT*
                         val isSelected = currentPos == selectedTilePosition
-                        GameTile(
-                            type = tileType,
-                            size = tileSize,
-                            isSelected = isSelected, // Pasează starea de selecție *MODIFICAT*
-                            onClick = { onTileClick(rowIndex, colIndex) }
-                        )
+                        val isDisappearing = tilesBeingMatched.contains(currentPos)
+
+                        if (tileType != EMPTY_TILE) { // Desenăm doar piese non-goale
+                            GameTile(
+                                type = tileType,
+                                size = tileSize,
+                                isSelected = isSelected,
+                                isDisappearing = isDisappearing, // Pasează starea nouă
+                                onClick = { onTileClick(rowIndex, colIndex) }
+                            )
+                        } else {
+                            // Spațiu gol, nu desenăm nimic (sau un placeholder transparent)
+                            Spacer(modifier = Modifier.size(tileSize))
+                        }
                     }
                 }
             }
@@ -458,40 +484,68 @@ fun GameBoard(
 fun GameTile(
     type: Int,
     size: Dp,
-    isSelected: Boolean, // Primește starea de selecție *MODIFICAT*
+    isSelected: Boolean,
+    isDisappearing: Boolean, // *NOU*
     onClick: () -> Unit
 ) {
-    // Definire efect vizual pentru selecție *MODIFICAT*
-    val tileModifier = Modifier
-        .size(size)
-        .padding(1.dp) // Ajustează padding-ul dacă vrei spațiu între piese
-        .then(
-            if (isSelected) {
-                Modifier
-                    .border( // Bordură galbenă groasă la selecție
-                        width = 2.dp, // Îngroșăm puțin bordura
-                        color = Color.Yellow,
-                        shape = MaterialTheme.shapes.small
-                    )
-                    .scale(1.05f) // Mărește ușor piesa selectată
-            } else {
-                Modifier // Fără modificări extra dacă nu e selectată (bordura implicită dispare)
-                // Dacă vrei o bordură subțire mereu, adaug-o aici:
-                // .border(
-                //     width = 0.5.dp,
-                //     color = Color.Black.copy(alpha = 0.1f),
-                //     shape = MaterialTheme.shapes.small
-                // )
+    // --- Stare pentru animație ---
+    val scale = remember { Animatable(1f) } // Scala inițială 1.0
+    val alpha = remember { Animatable(1f) } // Alpha inițial 1.0
+
+    // --- Efect care rulează când isDisappearing devine true ---
+    LaunchedEffect(isDisappearing) {
+        if (isDisappearing) {
+            // Lansează animațiile în paralel
+            launch {
+                scale.animateTo(
+                    targetValue = 0.3f, // Se micșorează
+                    animationSpec = tween(durationMillis = 300) // Durata animației
+                )
             }
-        )
-        .background(
-            color = tileColors[type] ?: Color.Gray,
-            shape = MaterialTheme.shapes.small
-        )
-        .clickable(onClick = onClick) // Click handler aplicat la sfârșit
+            launch {
+                alpha.animateTo(
+                    targetValue = 0f, // Devine transparent
+                    animationSpec = tween(durationMillis = 300)
+                )
+            }
+        } else {
+            // Opcional: Resetează instant dacă nu dispare (de ex, dacă o potrivire e anulată)
+            // scale.snapTo(1f)
+            // alpha.snapTo(1f)
+            // Sau animat înapoi, dar snap e probabil mai bun
+        }
+    }
+
+    // --- Modificatori ---
+    val selectionModifier = if (isSelected) {
+        Modifier
+            .border(
+                width = 2.dp,
+                color = Color.Yellow,
+                shape = MaterialTheme.shapes.small
+            )
+            .scale(1.05f) // Scalarea de la selecție
+    } else {
+        Modifier
+    }
 
     Box(
-        modifier = tileModifier, // Aplică modificatorul compus
+        modifier = Modifier
+            .size(size)
+            .padding(1.dp)
+            // *NOU:* Aplică scale și alpha animate folosind graphicsLayer
+            .graphicsLayer(
+                scaleX = scale.value,
+                scaleY = scale.value,
+                alpha = alpha.value
+            )
+            // Aplică selecția PESTE efectul de graphicsLayer
+            .then(selectionModifier)
+            .background(
+                color = tileColors[type] ?: Color.Gray,
+                shape = MaterialTheme.shapes.small
+            )
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         // Conținut piesă (opțional)
