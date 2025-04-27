@@ -1,7 +1,7 @@
 // ATENȚIE: Asigură-te că acest nume de pachet se potrivește cu structura proiectului tău!
 package com.example.match3puzzlegame
-// Test GitHub undeva în MainActivity.kt).
-// --- Importuri Esențiale ---
+import kotlinx.coroutines.delay // Pentru pauze
+import kotlinx.coroutines.launch // Pentru a porni corutina
 import android.os.Bundle
 import android.util.Log // Pentru depanare
 import androidx.activity.ComponentActivity
@@ -24,8 +24,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.match3puzzlegame.ui.theme.Match3PuzzleGameTheme // Import tema
-import kotlin.math.abs // Import pentru valoare absolută
+import com.example.match3puzzlegame.ui.theme.Match3PuzzleGameTheme
+import kotlin.math.abs
 
 // --- Constante ---
 const val ROWS = 8
@@ -49,10 +49,10 @@ val tileColors: Map<Int, Color> = mapOf(
     TILE_TYPE_5 to Color.Magenta.copy(alpha = 0.8f)
 )
 
-// --- Clasa pentru Poziție --- *NOU*
+// --- Clasa pentru Poziție ---
 data class TilePosition(val row: Int, val col: Int)
 
-// --- TAG pentru Logcat --- *NOU*
+// --- TAG pentru Logcat ---
 private const val TAG = "Match3Game"
 
 class MainActivity : ComponentActivity() {
@@ -66,22 +66,20 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+
+
 @Composable
 fun GameScreen() {
     var score by remember { mutableStateOf(0) }
     var feedbackMessage by remember { mutableStateOf("") }
-    var board by remember {
-        mutableStateOf(
-            List(ROWS) {
-                MutableList(COLS) {
-                    TILE_TYPES.random()
-                }
-            }
-        )
-    }
+
+
+
     // --- Starea pentru Selecție --- *NOU*
     var selectedTilePos by remember { mutableStateOf<TilePosition?>(null) }
-
+    var isProcessing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     // Optimizare stare derivată pentru butonul meta
     val isMetaButtonEnabled = remember(score) { score >= META_COST }
     val metaButtonText = remember(score) {
@@ -100,138 +98,232 @@ fun GameScreen() {
         return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1)
     }
 
-    fun findMatches(): Set<TilePosition> {
-        val matches = mutableSetOf<TilePosition>()
-        val currentBoard = board // Lucrează cu starea curentă
 
-        // Verificare Orizontală
+
+
+    fun findMatchesOnBoard(targetBoard: List<List<Int>>): Set<TilePosition> {
+        val matches = mutableSetOf<TilePosition>()
+        val currentBoard = targetBoard
         for (r in 0 until ROWS) {
             var currentStreak = 1
             var currentType = -1 // Tip invalid inițial
             for (c in 0 until COLS) {
-                val tileType = currentBoard.getOrNull(r)?.getOrNull(c) ?: EMPTY_TILE
-
+                val tileType = targetBoard.getOrNull(r)?.getOrNull(c) ?: EMPTY_TILE // Folosește targetBoard
                 if (tileType != EMPTY_TILE && tileType == currentType) {
                     currentStreak++
                 } else {
-                    // Verifică dacă streak-ul anterior a fost o potrivire
                     if (currentStreak >= 3) {
-                        for (i in 1..currentStreak) {
-                            matches.add(TilePosition(r, c - i))
-                        }
+                        for (i in 1..currentStreak) { matches.add(TilePosition(r, c - i)) }
                     }
-                    // Resetează pentru piesa curentă (dacă nu e goală)
                     currentType = tileType
                     currentStreak = if (tileType != EMPTY_TILE) 1 else 0
                 }
             }
-            // Verifică streak-ul de la sfârșitul rândului
             if (currentStreak >= 3) {
-                for (i in 1..currentStreak) {
-                    matches.add(TilePosition(r, COLS - i))
-                }
+                for (i in 1..currentStreak) { matches.add(TilePosition(r, COLS - i)) }
             }
         }
-
         // Verificare Verticală
         for (c in 0 until COLS) {
             var currentStreak = 1
             var currentType = -1
             for (r in 0 until ROWS) {
-                val tileType = currentBoard.getOrNull(r)?.getOrNull(c) ?: EMPTY_TILE
-
+                val tileType = targetBoard.getOrNull(r)?.getOrNull(c) ?: EMPTY_TILE // Folosește targetBoard
                 if (tileType != EMPTY_TILE && tileType == currentType) {
                     currentStreak++
                 } else {
                     if (currentStreak >= 3) {
-                        for (i in 1..currentStreak) {
-                            matches.add(TilePosition(r - i, c))
-                        }
+                        for (i in 1..currentStreak) { matches.add(TilePosition(r - i, c)) }
                     }
                     currentType = tileType
                     currentStreak = if (tileType != EMPTY_TILE) 1 else 0
                 }
             }
             if (currentStreak >= 3) {
-                for (i in 1..currentStreak) {
-                    matches.add(TilePosition(ROWS - i, c))
-                }
+                for (i in 1..currentStreak) { matches.add(TilePosition(ROWS - i, c)) }
             }
         }
-        Log.d(TAG, "findMatches found: ${matches.size} tiles")
         return matches
     }
 
-    // Adaugă și această funcție în @Composable fun GameScreen()
 
-    fun processMatches(matchedTiles: Set<TilePosition>) {
-        if (matchedTiles.isEmpty()) return // Nu face nimic dacă nu sunt potriviri
 
-        // 1. Calculează scorul (simplu: 10 puncte per piesă)
-        val pointsEarned = matchedTiles.size * 10
-        score += pointsEarned
-        Log.d(TAG, "Match processed: ${matchedTiles.size} tiles, +$pointsEarned score. New score: $score")
-
-        // 2. Actualizează feedback-ul
-        feedbackMessage = "Potrivire de ${matchedTiles.size}! +$pointsEarned stele!"
-
-        // 3. Creează o nouă tablă cu piesele potrivite eliminate (înlocuite cu EMPTY_TILE)
-        val newBoard = board.map { it.toMutableList() }
-        matchedTiles.forEach { pos ->
-            // Verificare suplimentară a limitelor, deși nu ar trebui să fie necesară dacă findMatches e corect
-            if (pos.row in 0 until ROWS && pos.col in 0 until COLS) {
-                newBoard[pos.row][pos.col] = EMPTY_TILE
-            } else {
-                Log.w(TAG, "processMatches: Coordonată invalidă în setul de potriviri: $pos")
+    fun generateValidInitialBoard(): List<MutableList<Int>> {
+        var attempts = 0
+        while (attempts < 100) { // Adăugăm o limită de siguranță pentru a evita bucle infinite
+            Log.d(TAG, "Generating initial board attempt: ${attempts + 1}")
+            // 1. Generează o tablă candidată
+            val candidateBoard = List(ROWS) {
+                MutableList(COLS) { TILE_TYPES.random() }
             }
+
+            // 2. Verifică potrivirile pe tabla candidată
+            val initialMatches = findMatchesOnBoard(candidateBoard)
+
+            // 3. Dacă nu sunt potriviri, returnează tabla validă
+            if (initialMatches.isEmpty()) {
+                Log.d(TAG, "Valid initial board found after ${attempts + 1} attempts.")
+                return candidateBoard // Am găsit o tablă bună!
+            }
+
+            // 4. Dacă există potriviri, bucla continuă și generăm alta
+            attempts++
+            Log.d(TAG, "Initial board had matches, retrying...")
         }
-
-        // 4. Actualizează starea tablei
-        board = newBoard
-
-        // TODO: Aici vom adăuga logica pentru căderea pieselor (gravity)
+        // Fallback: Dacă nu găsim o tablă validă după multe încercări,
+        // returnăm ultima generată (cu potriviri) pentru a evita blocarea.
+        Log.w(TAG, "Could not generate a match-free initial board after 100 attempts. Using last generated board.")
+        // Să returnăm totuși o tablă goală în acest caz extrem pentru a fi clar
+        return List(ROWS) { MutableList(COLS) { EMPTY_TILE } } // Sau returnează ultima `candidateBoard`
     }
 
-    // --- Funcție Helper pentru Swap --- *NOU*
+    var board by remember {
+        Log.d(TAG, "Initializing board state by calling generateValidInitialBoard()")
+        mutableStateOf(generateValidInitialBoard()) // <-- Linia NOUĂ
+    }
+
+
+    fun applyGravityToBoard(targetBoard: List<MutableList<Int>>): List<MutableList<Int>> {
+        Log.d(TAG, "Applying gravity logic...")
+        val newBoard = targetBoard.map { it.toMutableList() } // Copie mutabilă
+        for (c in 0 until COLS) {
+            val column = mutableListOf<Int>()
+            // Adună toate piesele non-goale din coloană
+            for (r in 0 until ROWS) {
+                if (newBoard[r][c] != EMPTY_TILE) { // Folosește newBoard
+                    column.add(newBoard[r][c])
+                }
+            }
+            val emptyToAdd = ROWS - column.size
+            for (r in 0 until ROWS) {
+                newBoard[r][c] = if (r < emptyToAdd) EMPTY_TILE else column[r - emptyToAdd] // Modifică newBoard
+            }
+        }
+        Log.d(TAG, "Gravity logic finished.")
+        return newBoard // Returnează tipul corect
+    }
+
+
+
+
+    fun fillEmptyTilesOnBoard(targetBoard: List<MutableList<Int>>): List<MutableList<Int>> {
+        Log.d(TAG, "Filling empty tiles logic...")
+        val newBoard = targetBoard.map { it.toMutableList() }
+        var filledAny = false
+        for (r in 0 until ROWS) {
+            for (c in 0 until COLS) {
+                if (newBoard[r][c] == EMPTY_TILE) { // Verifică în copie
+                    newBoard[r][c] = TILE_TYPES.random() // Modifică în copie
+                    filledAny = true
+                }
+            }
+        }
+        Log.d(TAG, "Fill logic finished. Filled any: $filledAny")
+        // Returnăm copia modificată (sau originalul dacă nu s-a umplut nimic, deși copia e mai sigură)
+        return newBoard
+    }
+
+
+
+    suspend fun processMatchesAndCascades() {
+        var currentBoard = board // Începe cu starea curentă
+        var totalPointsThisTurn = 0
+        var cascadeCount = 0
+
+        while (true) { // Bucla cascadei
+            val matches = findMatchesOnBoard(currentBoard) // Găsește potriviri pe tabla curentă
+
+            if (matches.isEmpty()) {
+                Log.d(TAG, "No more matches found, ending cascade loop.")
+                if (cascadeCount > 0) { // Afișează scorul total doar dacă a fost cel puțin o potrivire
+                    feedbackMessage = "Total: +$totalPointsThisTurn stele!"
+                }
+                break // Ieși din bucla while dacă nu mai sunt potriviri
+            }
+
+            cascadeCount++
+            Log.d(TAG, "Cascade $cascadeCount: Found ${matches.size} matched tiles.")
+
+            // --- 1. Procesează potrivirile (calcul scor, pregătește golirea) ---
+            val pointsEarned = matches.size * 10 * cascadeCount // Bonus simplu pentru cascadă
+            totalPointsThisTurn += pointsEarned
+            score += pointsEarned // Actualizează scorul imediat
+
+            feedbackMessage = if (cascadeCount > 1) "Cascadă $cascadeCount! +$pointsEarned" else "Potrivire! +$pointsEarned"
+
+            val boardWithEmptyTiles = currentBoard.map { it.toMutableList() }
+            matches.forEach { pos ->
+                if (pos.row in 0 until ROWS && pos.col in 0 until COLS) {
+                    boardWithEmptyTiles[pos.row][pos.col] = EMPTY_TILE
+                }
+            }
+
+            // --- 2. Animație dispariție & Actualizare UI ---
+            delay(350L) // Așteaptă vizual dispariția (timp similar cu animația CSS)
+            board = boardWithEmptyTiles // Actualizează starea principală PENTRU a arăta spațiile goale
+            currentBoard = boardWithEmptyTiles // Continuăm procesarea de la această stare
+
+            // --- 3. Aplică Gravitația ---
+            val boardAfterGravity = applyGravityToBoard(currentBoard) // Funcție nouă care returnează tabla modificată
+
+            // --- 4. Animație cădere & Actualizare UI ---
+            delay(300L) // Așteaptă vizual căderea
+            board = boardAfterGravity // Actualizează starea principală PENTRU a arăta piesele căzute
+            currentBoard = boardAfterGravity
+
+            // --- 5. Umple spațiile goale ---
+            val boardAfterFill = fillEmptyTilesOnBoard(currentBoard) // Funcție nouă care returnează tabla modificată
+
+            // --- 6. Animație apariție & Actualizare UI ---
+            delay(300L) // Așteaptă vizual apariția pieselor noi
+            board = boardAfterFill // Actualizează starea principală finală pentru această iterație
+            currentBoard = boardAfterFill
+
+            // Bucla while va continua și va reapela findMatchesOnBoard cu currentBoard actualizat
+        } // Sfârșit while
+    } // Sfârșit processMatchesAndCascades
+
+
+
+        // --- Funcție Helper pentru Swap --- *NOU*
     fun swapTiles(pos1: TilePosition, pos2: TilePosition) {
-        Log.d(TAG, "swapTiles called for $pos1 and $pos2")
-        val newBoard = board.map { it.toMutableList() } // Copie profundă mutabilă
-        try {
-            val temp = newBoard[pos1.row][pos1.col]
-            newBoard[pos1.row][pos1.col] = newBoard[pos2.row][pos2.col]
-            newBoard[pos2.row][pos2.col] = temp
+        if (isProcessing) return // Verificare suplimentară
 
-            board = newBoard // Actualizează starea
+        Log.d(TAG, "Attempting swap between $pos1 and $pos2")
 
-            // Acum verifică potrivirile rezultate din swap
-            val matches = findMatches()
-            if (matches.isNotEmpty()) {
-                processMatches(matches)
-            } else {
-                // --- IMPORTANT: Dacă swap-ul NU creează potriviri, anulează-l! ---
-                // Altfel, jucătorul poate face mutări inutile.
-                // (Opțional, poți adăuga o mică animație de "nu" aici)
-                Log.d(TAG, "Swap invalid, reverting.")
-                feedbackMessage = "Mutare invalidă!"
-                // Refacem swap-ul înapoi
-                val revertedBoard = newBoard.map { it.toMutableList() } // Copie din nou
-                val temp = revertedBoard[pos1.row][pos1.col]
-                revertedBoard[pos1.row][pos1.col] = revertedBoard[pos2.row][pos2.col]
-                revertedBoard[pos2.row][pos2.col] = temp
-                board = revertedBoard // Revino la starea de dinainte de swap
+        // 1. Creează noua tablă cu piesele inversate
+        val boardAfterSwap = board.map { it.toMutableList() }
+        val temp = boardAfterSwap[pos1.row][pos1.col]
+        boardAfterSwap[pos1.row][pos1.col] = boardAfterSwap[pos2.row][pos2.col]
+        boardAfterSwap[pos2.row][pos2.col] = temp
+
+        // 2. Verifică *potențialele* potriviri DUPĂ swap (fără a modifica starea încă)
+        val potentialMatches = findMatchesOnBoard(boardAfterSwap) // Folosim o funcție ce primește tabla
+
+        if (potentialMatches.isNotEmpty()) {
+            // --- Swap valid - pornește procesarea ---
+            Log.d(TAG, "Swap valid, starting processing coroutine")
+            feedbackMessage = "" // Resetează feedback-ul
+            selectedTilePos = null // Deselectează vizual
+            isProcessing = true // Blochează input-ul
+
+            // Actualizează starea pentru a ARĂTA swap-ul
+            board = boardAfterSwap
+
+            // Lansează corutina pentru procesarea cascadei
+            scope.launch {
+                processMatchesAndCascades() // Rulează ciclul complet
+                isProcessing = false // Deblochează input-ul la sfârșit
+                Log.d(TAG, "Processing finished.")
             }
-
-
-            feedbackMessage = "Swap între (${pos1.row},${pos1.col}) și (${pos2.row},${pos2.col})"
-            // TODO: Verifică potrivirile după swap
-        } catch (e: IndexOutOfBoundsException) {
-            Log.e(TAG, "Eroare la swap: Index în afara limitelor! pos1=$pos1, pos2=$pos2", e)
-            feedbackMessage = "Eroare internă la swap!"
+        } else {
+            // --- Swap invalid - nu face nimic vizual pe termen lung ---
+            // (Am putea adăuga o animație scurtă de "shake" aici)
+            Log.d(TAG, "Swap invalid, no matches formed.")
+            feedbackMessage = "Mutare invalidă!"
+            selectedTilePos = null // Deselectează oricum
         }
     }
-
-    // Adaugă această funcție în interiorul @Composable fun GameScreen(),
-// la același nivel cu areAdjacent și swapTiles.
 
 
 
@@ -278,11 +370,17 @@ fun GameScreen() {
         )
         Spacer(modifier = Modifier.height(16.dp))
 
+
         // --- Tabla de Joc ---
         GameBoard(
             board = board,
-            selectedTilePosition = selectedTilePos, // Pasează starea de selecție *MODIFICAT*
-            onTileClick = { row, col -> // Logica de click *MODIFICAT*
+            selectedTilePosition = selectedTilePos,
+            onTileClick = { row, col ->
+                if (isProcessing) { // *ADAUGAT*
+                    Log.d(TAG, "Click ignorat - procesare în curs")
+                    return@GameBoard
+                }
+
                 val clickedPos = TilePosition(row, col)
                 Log.d(TAG, "onTileClick: ($row, $col)")
 
@@ -318,6 +416,8 @@ fun GameScreen() {
     }
 }
 
+
+
 @Composable
 fun GameBoard(
     board: List<List<Int>>,
@@ -351,6 +451,8 @@ fun GameBoard(
         }
     }
 }
+
+
 
 @Composable
 fun GameTile(
@@ -397,7 +499,7 @@ fun GameTile(
 }
 
 
-// --- Preview ---
+
 @Preview(showBackground = true, widthDp = 380, heightDp = 600)
 @Composable
 fun DefaultPreview() {
