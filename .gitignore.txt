@@ -1,0 +1,55 @@
+# Built application files
+*.apk
+*.aab
+
+# Files for the Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+**/build/
+.gradle/
+**/local.properties
+.idea/workspace.xml
+.idea/gradle.xml
+.idea/misc.xml
+.idea/libraries/
+.idea/modules.xml
+*.iml
+*.ipr
+*.iws
+
+# Local configuration files (sensitive information)
+local.properties
+
+# Log files
+*.log
+
+# Android Studio caches
+.idea/caches/
+.gradle/buildOutputCleanup/
+
+# Keystore files (NEVER commit these!)
+*.jks
+*.keystore
+
+# External native build folder generated in Android Studio 2.2 and later
+.externalNativeBuild/
+
+# Google Services (JSON file downloaded from Firebase Console)
+# google-services.json # Decomentează dacă folosești și nu vrei să-l urci
+
+# IntelliJ
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Misc
+.DS_Store # Mac specific
+Thumbs.db # Windows specific
+captures/ # Android Studio profiling data
+*.hprof # Heap dumps
