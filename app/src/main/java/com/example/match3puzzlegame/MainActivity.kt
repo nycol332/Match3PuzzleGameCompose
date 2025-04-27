@@ -1,6 +1,6 @@
 // ATENȚIE: Asigură-te că acest nume de pachet se potrivește cu structura proiectului tău!
 package com.example.match3puzzlegame
-
+// Test GitHub undeva în MainActivity.kt).
 // --- Importuri Esențiale ---
 import android.os.Bundle
 import android.util.Log // Pentru depanare
