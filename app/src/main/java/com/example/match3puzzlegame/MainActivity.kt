@@ -3,6 +3,7 @@ package com.example.match3puzzlegame
 import kotlinx.coroutines.delay // Pentru pauze
 import kotlinx.coroutines.launch // Pentru a porni corutina
 import android.os.Bundle
+import androidx.compose.foundation.shape.CircleShape
 import android.util.Log // Pentru depanare
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -52,6 +53,21 @@ val tileColors: Map<Int, Color> = mapOf(
     TILE_TYPE_5 to Color.Magenta.copy(alpha = 0.8f)
 )
 
+
+
+//ACUM
+fun getIngredientName(tileType: Int): String {
+    return when (tileType) {
+        TILE_TYPE_1 -> "Roșii" // Exemplu
+        TILE_TYPE_2 -> "Portocale" // Exemplu
+        TILE_TYPE_3 -> "Afine" // Exemplu
+        TILE_TYPE_4 -> "Mere" // Exemplu
+        TILE_TYPE_5 -> "Vinete" // Exemplu
+        else -> "Necunoscut"
+    }
+}
+
+
 // --- Clasa pentru Poziție ---
 data class TilePosition(val row: Int, val col: Int)
 
@@ -74,7 +90,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun GameScreen() {
-    var score by remember { mutableStateOf(0) }
+
+    var inventory by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
 
     var feedbackMessage by remember { mutableStateOf("") }
 
@@ -85,16 +102,13 @@ fun GameScreen() {
     var isProcessing by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
-    // Optimizare stare derivată pentru butonul meta
-    val isMetaButtonEnabled = remember(score) { score >= META_COST }
-    val metaButtonText = remember(score) {
-        if (isMetaButtonEnabled) {
-            "Renovează (Costă $META_COST Stele)"
-        } else {
-            val needed = META_COST - score
-            "Adună $needed Stele"
-        }
-    }
+
+    val isMetaButtonEnabled = false
+
+    val metaButtonText = "Îmbunătățiri (în curând)"
+
+
+
 
     // --- Funcție Helper pentru Adiacență --- *NOU*
     fun areAdjacent(pos1: TilePosition, pos2: TilePosition): Boolean {
@@ -108,7 +122,6 @@ fun GameScreen() {
 
     fun findMatchesOnBoard(targetBoard: List<List<Int>>): Set<TilePosition> {
         val matches = mutableSetOf<TilePosition>()
-        val currentBoard = targetBoard
         for (r in 0 until ROWS) {
             var currentStreak = 1
             var currentType = -1 // Tip invalid inițial
@@ -182,9 +195,9 @@ fun GameScreen() {
         return List(ROWS) { MutableList(COLS) { EMPTY_TILE } } // Sau returnează ultima `candidateBoard`
     }
 
+
     var board by remember {
-        Log.d(TAG, "Initializing board state by calling generateValidInitialBoard()")
-        mutableStateOf(generateValidInitialBoard()) // <-- Linia NOUĂ
+        mutableStateOf(generateValidInitialBoard())
     }
 
 
@@ -240,21 +253,34 @@ fun GameScreen() {
 
             if (matches.isEmpty()) {
                 Log.d(TAG, "No more matches found, ending cascade loop.")
-                if (cascadeCount > 0) { // Afișează scorul total doar dacă a fost cel puțin o potrivire
-                    feedbackMessage = "Total: +$totalPointsThisTurn stele!"
-                }
                 break // Ieși din bucla while dacă nu mai sunt potriviri
             }
             tilesBeingMatched = matches
             cascadeCount++
             Log.d(TAG, "Cascade $cascadeCount: Found ${matches.size} matched tiles.")
 
-            // --- 1. Procesează potrivirile (calcul scor, pregătește golirea) ---
-            val pointsEarned = matches.size * 10 * cascadeCount // Bonus simplu pentru cascadă
-            totalPointsThisTurn += pointsEarned
-            score += pointsEarned // Actualizează scorul imediat
 
-            feedbackMessage = if (cascadeCount > 1) "Cascadă $cascadeCount! +$pointsEarned" else "Potrivire! +$pointsEarned"
+            val ingredientsEarnedThisMatch = mutableMapOf<Int, Int>()
+            matches.forEach { pos ->
+                if (pos.row in 0 until ROWS && pos.col in 0 until COLS) {
+                    val tileType = currentBoard.getOrNull(pos.row)?.getOrNull(pos.col)
+                    if (tileType != null && tileType != EMPTY_TILE) {
+                        ingredientsEarnedThisMatch[tileType] =
+                            ingredientsEarnedThisMatch.getOrDefault(tileType, 0) + 1
+                    }
+                }
+            }
+            val currentInventory = inventory.toMutableMap()
+            ingredientsEarnedThisMatch.forEach { (ingredientId, quantity) ->
+                currentInventory[ingredientId] =
+                    currentInventory.getOrDefault(ingredientId, 0) + quantity
+            }
+            inventory = currentInventory
+            val feedbackParts =
+                ingredientsEarnedThisMatch.map { "+${it.value} ${getIngredientName(it.key)}" }
+            feedbackMessage =
+                if (cascadeCount > 1) "Cascadă $cascadeCount! ${feedbackParts.joinToString()}" else "Potrivire! ${feedbackParts.joinToString()}"
+            // --- 1. Procesează potrivirile (calcul scor, pregătește golirea) ---
 
             val boardWithEmptyTiles = currentBoard.map { it.toMutableList() }
             matches.forEach { pos ->
@@ -263,9 +289,9 @@ fun GameScreen() {
                 }
             }
 
+
             // --- 2. Animație dispariție & Actualizare UI ---
             delay(400L) // Așteaptă vizual dispariția (timp similar cu animația CSS)
-
             val boardAfterMatch = currentBoard.map { it.toMutableList() }
             matches.forEach { pos ->
                 if (pos.row in 0 until ROWS && pos.col in 0 until COLS) {
@@ -280,7 +306,6 @@ fun GameScreen() {
 
             // --- 3. Aplică Gravitația ---
             val boardAfterGravity = applyGravityToBoard(currentBoard) // Funcție nouă care returnează tabla modificată
-
             delay(300L)
             board = boardAfterGravity
             currentBoard = boardAfterGravity
@@ -289,7 +314,6 @@ fun GameScreen() {
 
             // ---  Umple spațiile goale ---
             val boardAfterFill = fillEmptyTilesOnBoard(currentBoard) // Funcție nouă care returnează tabla modificată
-
             delay(300L)
             board = boardAfterFill
             currentBoard = boardAfterFill
@@ -299,7 +323,7 @@ fun GameScreen() {
 
 
 
-        // --- Funcție Helper pentru Swap --- *NOU*
+        // --- Funcție Helper pentru Swap ---
     fun swapTiles(pos1: TilePosition, pos2: TilePosition) {
         if (isProcessing) return // Verificare suplimentară
 
@@ -346,26 +370,13 @@ fun GameScreen() {
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // --- Secțiunea Info Joc (rămâne la fel) ---
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(text = "Stele:", fontSize = 18.sp)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = score.toString(),
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFFE91E63)
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-
         // --- Buton Meta (rămâne la fel) ---
         Button(
             onClick = {
                 if (isMetaButtonEnabled) {
-                    score -= META_COST
                     feedbackMessage = "Ai cheltuit $META_COST stele! 🎉"
                 }
+                Log.d(TAG, "Meta Button Clicked (currently disabled)")
             },
             enabled = isMetaButtonEnabled
         ) {
@@ -382,6 +393,38 @@ fun GameScreen() {
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().heightIn(min = 20.dp)
         )
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Inventar:", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly // Distribuie spațiul
+        ) {
+            inventory.entries.sortedBy { it.key }.forEach { (ingredientId, quantity) ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Afișează un indicator vizual (culoarea piesei)
+                    Box(modifier = Modifier
+                        .size(24.dp)
+                        .background(tileColors[ingredientId] ?: Color.Gray, CircleShape) // Cerc colorat
+                    )
+                    // Afișează cantitatea
+                    Text(
+                        text = quantity.toString(),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    // Opcional: Afișează numele ingredientului
+                    Text(
+                        text = getIngredientName(ingredientId),
+                        fontSize = 10.sp
+                    )
+                }
+            }
+            // Afișează un mesaj dacă inventarul e gol
+            if (inventory.isEmpty()) {
+                Text("Colectează ingrediente potrivind piese!", fontSize = 12.sp)
+            }
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
 
@@ -448,7 +491,6 @@ fun GameBoard(
             .background(Color(0xFFA0A0A0))
             .padding(4.dp)
     ) {
-
         val tileSize = maxWidth / COLS
         Column {
             board.forEachIndexed { rowIndex, rowData ->
@@ -510,8 +552,8 @@ fun GameTile(
             }
         } else {
             // Opcional: Resetează instant dacă nu dispare (de ex, dacă o potrivire e anulată)
-            // scale.snapTo(1f)
-            // alpha.snapTo(1f)
+             scale.snapTo(1f)
+             alpha.snapTo(1f)
             // Sau animat înapoi, dar snap e probabil mai bun
         }
     }
@@ -528,12 +570,11 @@ fun GameTile(
     } else {
         Modifier
     }
-
     Box(
         modifier = Modifier
             .size(size)
             .padding(1.dp)
-            // *NOU:* Aplică scale și alpha animate folosind graphicsLayer
+            //  Aplică scale și alpha animate folosind graphicsLayer
             .graphicsLayer(
                 scaleX = scale.value,
                 scaleY = scale.value,
