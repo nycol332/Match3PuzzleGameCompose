@@ -32,6 +32,14 @@ import androidx.compose.animation.core.tween // Specifică durata animației
 import androidx.compose.ui.graphics.graphicsLayer // Pentru a aplica scale și alpha
 import androidx.compose.ui.res.painterResource // Pentru a încărca drawable
 import androidx.compose.foundation.Image // Pentru a afișa imagini
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton // Pentru butonul de închidere al dialogului
+import androidx.compose.foundation.shape.CircleShape // Importat deja, dar verifică
+import androidx.compose.foundation.Image // Importat deja, dar verifică
+import androidx.compose.ui.res.painterResource // Importat deja, dar verifică
+
+
+
 
 // --- Constante ---
 const val ROWS = 8
@@ -62,6 +70,36 @@ val tileDrawables: Map<Int, Int> = mapOf(
     TILE_TYPE_4 to R.drawable.porumb,
     TILE_TYPE_5 to R.drawable.cartof
 )
+
+
+data class Recipe(
+    val id: Int, // Identificator unic
+    val name: String,
+    val description: String,
+    val ingredientsNeeded: Map<Int, Int>
+)
+
+val initialRecipes = listOf(
+    Recipe(
+        id = 1,
+        name = "Gustare misterioasa",
+        description = "Cucumber + Corn",
+        ingredientsNeeded = mapOf(TILE_TYPE_1 to 5, TILE_TYPE_4 to 3) // 5 Roșii, 3 Mere (exemplu!)
+    ),
+    Recipe(
+        id = 2,
+        name = "Salata misterioasa",
+        description = "Tomato + Corn",
+        ingredientsNeeded = mapOf(TILE_TYPE_2 to 4, TILE_TYPE_4 to 4) // 4 Portocale, 4 Mere
+    ),
+    Recipe(
+        id = 3,
+        name = "Tocăniță Misterioasă",
+        description = "Cucumber + Potato + Onion",
+        ingredientsNeeded = mapOf(TILE_TYPE_1 to 3, TILE_TYPE_5 to 6, TILE_TYPE_3 to 2) // 3 Roșii, 6 Vinete, 2 Afine
+    )
+)
+
 
 
 fun getIngredientName(tileType: Int): String {
@@ -117,10 +155,14 @@ fun GameScreen() {
 
     var score by remember { mutableStateOf(0) }
 
+    val availableRecipes by remember { mutableStateOf(initialRecipes) } // Lista rețetelor
+    var selectedRecipeToShow by remember { mutableStateOf<Recipe?>(null) }
 
 
 
-    // --- Funcție Helper pentru Adiacență --- *NOU*
+
+
+    // --- Funcție Helper pentru Adiacență ---
     fun areAdjacent(pos1: TilePosition, pos2: TilePosition): Boolean {
         val rowDiff = abs(pos1.row - pos2.row)
         val colDiff = abs(pos1.col - pos2.col)
@@ -417,6 +459,61 @@ fun GameScreen() {
         }
     }
 
+    val currentRecipe = selectedRecipeToShow // Copie locală pentru dialog
+    if (currentRecipe != null) {
+        AlertDialog(
+            onDismissRequest = {
+                // Ce se întâmplă când utilizatorul dă click în afara dialogului sau apasă Back
+                selectedRecipeToShow = null // Închide dialogul
+                Log.d(TAG, "Recipe dialog dismissed.")
+            },
+            title = { Text(text = currentRecipe.name) }, // Titlul dialogului
+            text = { // Conținutul principal al dialogului
+                Column {
+                    Text(currentRecipe.description, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Ingrediente Necesare:", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // Listează ingredientele
+                    currentRecipe.ingredientsNeeded.forEach { (ingredientId, quantityNeeded) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            val drawableResId = tileDrawables[ingredientId]
+                            if (drawableResId != null) {
+                                Image(
+                                    painter = painterResource(id = drawableResId),
+                                    contentDescription = getIngredientName(ingredientId),
+                                    modifier = Modifier.size(24.dp) // Iconiță mică
+                                )
+                            } else {
+                                // Fallback cerc colorat
+                                Box(Modifier.size(20.dp).background(tileColors[ingredientId] ?: Color.Gray, CircleShape))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("${getIngredientName(ingredientId)}: $quantityNeeded")
+                            // TODO (Mai târziu): Afișează și cantitatea deținută din inventar (ex: "3 / 5")
+                        }
+                    }
+                    // TODO (Mai târziu): Adaugă buton de "Gătește" dacă ai suficiente ingrediente
+                }
+            },
+            confirmButton = { // Butonul principal (aici doar pentru a închide)
+                TextButton(onClick = {
+                    selectedRecipeToShow = null // Închide dialogul
+                    Log.d(TAG, "Recipe dialog confirmed (closed).")
+                }) {
+                    Text("OK")
+                }
+            }
+            // Poți adăuga și un dismissButton dacă vrei
+            // dismissButton = { TextButton(onClick = { selectedRecipeToShow = null }) { Text("Anulează") } }
+        )
+    } // Sfârșit if (currentRecipe != null)
+
+
+
 
 
     // --- Structura UI ---
@@ -461,6 +558,8 @@ fun GameScreen() {
             modifier = Modifier.fillMaxWidth().heightIn(min = 20.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
+
+        // --- Inventar
         Text("Inventar:", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(4.dp))
         Row(
@@ -503,6 +602,37 @@ fun GameScreen() {
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
+
+
+        // --- Secțiunea Rețete (Listă Nume) --- *MODIFICAT* - Mutăm lista într-un loc mai bun
+        // Momentan o comentăm/ștergem de aici pentru a nu aglomera ecranul principal
+        /*
+        Text("Rețete Descoperite:", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(4.dp))
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+             availableRecipes.forEach { recipe -> /* ... Text clickabil ... */ }
+             if (availableRecipes.isEmpty()) { /* ... mesaj gol ... */ }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        */
+
+
+
+        // --- Buton pentru a deschide lista de rețete ---
+        Button(onClick = {
+            // TODO: Navighează la un ecran dedicat pentru rețete sau afișează lista altfel
+            // Momentan, putem folosi feedback-ul sau un log
+            feedbackMessage = "Vezi cartea de bucate! (TODO)"
+            Log.d(TAG, "Recipe book button clicked - TODO: Show list properly")
+            // Sau, temporar, pentru test, putem afișa prima rețetă direct:
+             if (availableRecipes.isNotEmpty()) { selectedRecipeToShow = availableRecipes.first() }
+        }) {
+            Text("Carte de Bucate")
+        }
+        Spacer(modifier = Modifier.height(16.dp)) // Spațiu înainte de tablă
+
+
+
 
 
         // --- Tabla de Joc ---
