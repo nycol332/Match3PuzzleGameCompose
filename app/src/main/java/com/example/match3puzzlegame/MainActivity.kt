@@ -30,6 +30,8 @@ import kotlin.math.abs
 import androidx.compose.animation.core.Animatable // Pentru animație detaliată
 import androidx.compose.animation.core.tween // Specifică durata animației
 import androidx.compose.ui.graphics.graphicsLayer // Pentru a aplica scale și alpha
+import androidx.compose.ui.res.painterResource // Pentru a încărca drawable
+import androidx.compose.foundation.Image // Pentru a afișa imagini
 
 // --- Constante ---
 const val ROWS = 8
@@ -53,16 +55,22 @@ val tileColors: Map<Int, Color> = mapOf(
     TILE_TYPE_5 to Color.Magenta.copy(alpha = 0.8f)
 )
 
+val tileDrawables: Map<Int, Int> = mapOf(
+    TILE_TYPE_1 to R.drawable.castravete, // Înlocuiește cu numele reale ale fișierelor tale!
+    TILE_TYPE_2 to R.drawable.rosie,
+    TILE_TYPE_3 to R.drawable.ceapa,
+    TILE_TYPE_4 to R.drawable.porumb,
+    TILE_TYPE_5 to R.drawable.cartof
+)
 
 
-//ACUM
 fun getIngredientName(tileType: Int): String {
     return when (tileType) {
-        TILE_TYPE_1 -> "Roșii" // Exemplu
-        TILE_TYPE_2 -> "Portocale" // Exemplu
-        TILE_TYPE_3 -> "Afine" // Exemplu
-        TILE_TYPE_4 -> "Mere" // Exemplu
-        TILE_TYPE_5 -> "Vinete" // Exemplu
+        TILE_TYPE_1 -> "Cucumber" // Exemplu
+        TILE_TYPE_2 -> "Tomato" // Exemplu
+        TILE_TYPE_3 -> "Onion" // Exemplu
+        TILE_TYPE_4 -> "Corn" // Exemplu
+        TILE_TYPE_5 -> "Potato" // Exemplu
         else -> "Necunoscut"
     }
 }
@@ -106,6 +114,8 @@ fun GameScreen() {
     val isMetaButtonEnabled = false
 
     val metaButtonText = "Îmbunătățiri (în curând)"
+
+    var score by remember { mutableStateOf(0) }
 
 
 
@@ -244,21 +254,37 @@ fun GameScreen() {
 
 
     suspend fun processMatchesAndCascades() {
-        var currentBoard = board // Începe cu starea curentă
-        var totalPointsThisTurn = 0
+
+        var currentBoard = board
+
         var cascadeCount = 0
+
+        var basePointsThisMatch = 0
+        var cascadeMultiplier = 1.0 // Multiplicator inițial
+        var totalScoreEarnedThisTurn = 0 // Scorul total adunat în toate cascadele
+
+
+
+
 
         while (true) { // Bucla cascadei
             val matches = findMatchesOnBoard(currentBoard) // Găsește potriviri pe tabla curentă
 
             if (matches.isEmpty()) {
                 Log.d(TAG, "No more matches found, ending cascade loop.")
-                break // Ieși din bucla while dacă nu mai sunt potriviri
-            }
+                if (totalScoreEarnedThisTurn > 0) {
+                    score += totalScoreEarnedThisTurn
+                    feedbackMessage = "Ai câștigat în total $totalScoreEarnedThisTurn puncte!"
+                    Log.d(TAG, "Total score earned this turn: $totalScoreEarnedThisTurn. New global score: $score")
+                    delay(800L)
+                }
+            break
+        }
+
             tilesBeingMatched = matches
             cascadeCount++
             Log.d(TAG, "Cascade $cascadeCount: Found ${matches.size} matched tiles.")
-
+            basePointsThisMatch = 0
 
             val ingredientsEarnedThisMatch = mutableMapOf<Int, Int>()
             matches.forEach { pos ->
@@ -267,9 +293,26 @@ fun GameScreen() {
                     if (tileType != null && tileType != EMPTY_TILE) {
                         ingredientsEarnedThisMatch[tileType] =
                             ingredientsEarnedThisMatch.getOrDefault(tileType, 0) + 1
+
+                        // Adaugă puncte de bază
+                        basePointsThisMatch += 10 // Exemplu: 10 puncte per piesă
                     }
                 }
             }
+            if (matches.size >= 5) {
+                basePointsThisMatch += 100
+                Log.d(TAG, "Bonus 5+ match applied!")
+            } else if (matches.size == 4) {
+                basePointsThisMatch += 50 // Bonus pentru 4
+                Log.d(TAG, "Bonus 4 match applied!")
+            }
+
+            val pointsThisCascade = (basePointsThisMatch * cascadeMultiplier).toInt()
+            totalScoreEarnedThisTurn += pointsThisCascade
+
+            Log.d(TAG,"Cascade $cascadeCount: Base Points=$basePointsThisMatch, Multiplier=$cascadeMultiplier, Points This Cascade=$pointsThisCascade")
+
+
             val currentInventory = inventory.toMutableMap()
             ingredientsEarnedThisMatch.forEach { (ingredientId, quantity) ->
                 currentInventory[ingredientId] =
@@ -278,8 +321,16 @@ fun GameScreen() {
             inventory = currentInventory
             val feedbackParts =
                 ingredientsEarnedThisMatch.map { "+${it.value} ${getIngredientName(it.key)}" }
-            feedbackMessage =
-                if (cascadeCount > 1) "Cascadă $cascadeCount! ${feedbackParts.joinToString()}" else "Potrivire! ${feedbackParts.joinToString()}"
+            val scoreFeedback = "+$pointsThisCascade puncte!"
+            feedbackMessage = if (cascadeCount > 1) {
+                "Cascadă $cascadeCount! ${feedbackParts.joinToString()} $scoreFeedback"
+            } else {
+                "Potrivire! ${feedbackParts.joinToString()} $scoreFeedback"
+            }
+
+            cascadeMultiplier += 0.5
+
+
             // --- 1. Procesează potrivirile (calcul scor, pregătește golirea) ---
 
             val boardWithEmptyTiles = currentBoard.map { it.toMutableList() }
@@ -312,13 +363,16 @@ fun GameScreen() {
 
 
 
-            // ---  Umple spațiile goale ---
+            // ---4. Umple spațiile goale ---
             val boardAfterFill = fillEmptyTilesOnBoard(currentBoard) // Funcție nouă care returnează tabla modificată
             delay(300L)
             board = boardAfterFill
             currentBoard = boardAfterFill
 
+            Log.d(TAG, "End of cascade $cascadeCount processing loop. Checking for more matches...")
+
         }
+        Log.d(TAG, "processMatchesAndCascades finished.")
     }
 
 
@@ -370,7 +424,20 @@ fun GameScreen() {
         modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // --- Buton Meta (rămâne la fel) ---
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = "Scor:", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = score.toString(), // Afișează scorul din starea 'score'
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary // Folosește o culoare din tema
+            )
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+
+
+        // --- Buton Meta  ---
         Button(
             onClick = {
                 if (isMetaButtonEnabled) {
@@ -403,10 +470,20 @@ fun GameScreen() {
             inventory.entries.sortedBy { it.key }.forEach { (ingredientId, quantity) ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     // Afișează un indicator vizual (culoarea piesei)
-                    Box(modifier = Modifier
-                        .size(24.dp)
-                        .background(tileColors[ingredientId] ?: Color.Gray, CircleShape) // Cerc colorat
-                    )
+                    val drawableResId = tileDrawables[ingredientId] // Găsește ID-ul resursei
+                    if (drawableResId != null) {
+                        Image(
+                            painter = painterResource(id = drawableResId),
+                            contentDescription = getIngredientName(ingredientId), // Text alternativ
+                            modifier = Modifier.size(32.dp) // Ajustează dimensiunea după preferințe
+                        )
+                    } else {
+                        // Fallback: Afișează un cerc colorat dacă imaginea nu e găsită
+                        Box(modifier = Modifier
+                            .size(24.dp)
+                            .background(tileColors[ingredientId] ?: Color.Gray, CircleShape)
+                        )
+                    }
                     // Afișează cantitatea
                     Text(
                         text = quantity.toString(),
@@ -527,7 +604,7 @@ fun GameTile(
     type: Int,
     size: Dp,
     isSelected: Boolean,
-    isDisappearing: Boolean, // *NOU*
+    isDisappearing: Boolean,
     onClick: () -> Unit
 ) {
     // --- Stare pentru animație ---
@@ -570,26 +647,38 @@ fun GameTile(
     } else {
         Modifier
     }
+    val drawableResId = tileDrawables[type]
+
+
     Box(
         modifier = Modifier
             .size(size)
             .padding(1.dp)
-            //  Aplică scale și alpha animate folosind graphicsLayer
             .graphicsLayer(
                 scaleX = scale.value,
                 scaleY = scale.value,
                 alpha = alpha.value
             )
-            // Aplică selecția PESTE efectul de graphicsLayer
             .then(selectionModifier)
+            // Folosim un fundal generic sau cel vechi dacă imaginea nu se încarcă
             .background(
-                color = tileColors[type] ?: Color.Gray,
+                color = tileColors[type]?.copy(alpha = 0.4f) ?: Color.Gray.copy(alpha = 0.4f), // Fundal mai transparent
                 shape = MaterialTheme.shapes.small
             )
             .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center // Important pentru imagine
     ) {
-        // Conținut piesă (opțional)
+        // --- *NOU* Afișează imaginea dacă există ---
+        if (drawableResId != null) {
+            Image(
+                painter = painterResource(id = drawableResId),
+                contentDescription = getIngredientName(type), // Text alternativ pentru accesibilitate
+                modifier = Modifier.fillMaxSize(0.8f) // Umple 80% din box, lasă loc pentru fundal/border
+            )
+        } else {
+            // Opcional: Afișează tipul ca text dacă nu avem imagine
+            // Text(type.toString(), color = Color.White)
+        }
     }
 }
 
