@@ -37,6 +37,9 @@ import androidx.compose.material3.TextButton // Pentru butonul de închidere al 
 import androidx.compose.foundation.shape.CircleShape // Importat deja, dar verifică
 import androidx.compose.foundation.Image // Importat deja, dar verifică
 import androidx.compose.ui.res.painterResource // Importat deja, dar verifică
+import androidx.compose.animation.core.VectorConverter // Pentru IntOffset
+import androidx.compose.animation.core.tween // Deja importat? Verifică.
+import androidx.compose.ui.unit.IntOffset // Pentru Modifier.offset
 
 
 // --- Constante ---
@@ -199,6 +202,18 @@ fun GameScreen() {
     var feedbackMessage by remember { mutableStateOf("") }
 
     var selectedTilePos by remember { mutableStateOf<TilePosition?>(null) }
+
+
+    // --- Stare pentru animația de SWAP ---
+    // Reține perechea de poziții care fac swap și offset-urile lor animate
+    var swappingTiles by remember { mutableStateOf<Pair<TilePosition, TilePosition>?>(null) }
+    // Offset animat pentru prima piesă din pereche
+    val tile1Offset = remember { Animatable(IntOffset.Zero, IntOffset.VectorConverter) }
+    // Offset animat pentru a doua piesă din pereche
+    val tile2Offset = remember { Animatable(IntOffset.Zero, IntOffset.VectorConverter) }
+    // Stare pentru a ști când animația de swap este gata
+    var swapAnimationFinished by remember { mutableStateOf(true) } // Inițial, nicio animație nu rulează
+
 
     var tilesBeingMatched by remember { mutableStateOf<Set<TilePosition>>(emptySet()) }
 
@@ -648,8 +663,8 @@ fun GameScreen() {
     }
 
 
-        // --- Funcție Helper pentru Swap ---
 
+    // --- Funcție Helper pentru Swap ---
     fun swapTiles(pos1: TilePosition, pos2: TilePosition) {
         Log.d(TAG, "Entering swapTiles. isProcessing=$isProcessing, gameState=$gameState, movesLeft=$movesLeft")
         if (isProcessing || gameState != "Playing") {
@@ -710,6 +725,50 @@ fun GameScreen() {
             checkLevelEndCondition() // Verifică dacă a fost ultima mutare
         }
     }
+
+    // --- Efect pentru a rula animația de SWAP (Varianta Corectată cu Job.join()) ---
+    LaunchedEffect(swappingTiles) {
+        val tiles = swappingTiles
+        if (tiles != null) {
+            Log.d(TAG, "LaunchedEffect: Animating swap for $tiles")
+            val (pos1, pos2) = tiles
+            val xDiff = (pos2.col - pos1.col)
+            val yDiff = (pos2.row - pos1.row)
+
+            // Lansăm animațiile și PĂSTRĂM referințele la Job-uri
+            val job1 = scope.launch {
+                tile1Offset.snapTo(IntOffset.Zero)
+                tile1Offset.animateTo(
+                    targetValue = IntOffset(x = xDiff, y = yDiff),
+                    animationSpec = tween(durationMillis = 300) // Poți ajusta durata aici
+                )
+                tile1Offset.snapTo(IntOffset.Zero) // Resetăm la finalul animației job-ului
+            }
+            val job2 = scope.launch {
+                tile2Offset.snapTo(IntOffset.Zero)
+                tile2Offset.animateTo(
+                    targetValue = IntOffset(x = -xDiff, y = -yDiff),
+                    animationSpec = tween(durationMillis = 300) // Poți ajusta durata aici
+                )
+                tile2Offset.snapTo(IntOffset.Zero) // Resetăm la finalul animației job-ului
+            }
+
+            // --- Așteaptă ca AMBELE animații să se termine --- *MODIFICAT*
+            Log.d(TAG, "Waiting for swap animations to join...")
+            job1.join() // Așteaptă finalizarea job1
+            job2.join() // Așteaptă finalizarea job2
+            Log.d(TAG, "Swap animations joined.")
+
+            // --- Continuă DUPĂ ce animațiile s-au terminat ---
+            Log.d(TAG, "Swap animation visually complete. Proceeding with logic.")
+            swapTiles(pos1, pos2) // ACUM apelăm logica reală
+            swappingTiles = null // Resetează starea de swap
+            swapAnimationFinished = true // Marchează finalul animației
+            Log.d(TAG, "Swap logic processing initiated, state reset.")
+
+        }
+    }
+    // --- Sfârșit LaunchedEffect Animație Swap ---
 
     val currentRecipe = selectedRecipeToShow // Copie locală pentru dialog
     if (currentRecipe != null) {
@@ -774,11 +833,6 @@ fun GameScreen() {
             // dismissButton = { TextButton(onClick = { selectedRecipeToShow = null }) { Text("Anulează") } }
         )
     }
-
-
-
-
-
 
 
 
@@ -983,17 +1037,19 @@ fun GameScreen() {
 
 
 
-
         // --- Tabla de Joc ---
         if (gameState == "Playing") {
             Spacer(modifier = Modifier.height(16.dp))
             GameBoard(
                 board = board,
                 selectedTilePosition = selectedTilePos,
+                swappingTilesInfo = swappingTiles,
+                tile1AnimatedOffset = tile1Offset.value,
+                tile2AnimatedOffset = tile2Offset.value,
                 tilesBeingMatched = tilesBeingMatched,
                 onTileClick = { row, col ->
-                    if (isProcessing) {
-                        Log.d(TAG, "Click ignorat - procesare în curs")
+                    if (isProcessing || !swapAnimationFinished) { // *MODIFICAT* Blochează click și în timpul animației de swap
+                        Log.d(TAG, "Click ignorat - procesare sau animație swap în curs")
                         return@GameBoard
                     }
 
@@ -1016,12 +1072,15 @@ fun GameScreen() {
                             Log.d(TAG, "Deselectare")
                         } else if (areAdjacent(currentSelection, clickedPos)) {
                             // Click pe piesă adiacentă: Swap
-                            swapTiles(currentSelection, clickedPos)
-                            selectedTilePos = null // Deselectează după swap
-                            Log.d(TAG, "Swap între $currentSelection și $clickedPos")
-                            // Mesajul de feedback e setat în swapTiles
+                            Log.d(TAG, "Initiating swap animation between $currentSelection and $clickedPos")
+                            swappingTiles = Pair(currentSelection, clickedPos) // Setează perechea care face swap
+                            selectedTilePos = null // Deselectează vizual (fără highlight galben)
+                            swapAnimationFinished = false // Marcheză că animația începe
+                            feedbackMessage = "Schimbare..." // Feedback temporar
+
+                            // Animația va fi lansată de un LaunchedEffect care observă `swappingTiles`
                         } else {
-                            // Click pe piesă neadiacentă: Selectează noua piesă
+                            // --- Selectare piesă neadiacentă (rămâne la fel) ---
                             selectedTilePos = clickedPos
                             feedbackMessage = "Selectat: (${clickedPos.row}, ${clickedPos.col})"
                             Log.d(TAG, "Selectare nouă (neadiacentă): $clickedPos")
@@ -1043,6 +1102,9 @@ fun GameBoard(
     board: List<List<Int>>,
     selectedTilePosition: TilePosition?,
     tilesBeingMatched: Set<TilePosition>,
+    swappingTilesInfo: Pair<TilePosition, TilePosition>?, // Perechea care face swap
+    tile1AnimatedOffset: IntOffset, // Offset animat calculat pentru piesa 1
+    tile2AnimatedOffset: IntOffset, // Offset animat calculat pentru piesa 2
     onTileClick: (row: Int, col: Int) -> Unit
 ) {
     BoxWithConstraints(
@@ -1058,22 +1120,24 @@ fun GameBoard(
                 Row {
                     rowData.forEachIndexed { colIndex, tileType ->
                         val currentPos = TilePosition(rowIndex, colIndex)
-                        // Verifică dacă piesa curentă este cea selectată *MODIFICAT*
                         val isSelected = currentPos == selectedTilePosition
                         val isDisappearing = tilesBeingMatched.contains(currentPos)
+                        val animatedOffset = when (currentPos) {
+                            swappingTilesInfo?.first -> tile1AnimatedOffset
+                            swappingTilesInfo?.second -> tile2AnimatedOffset
+                            else -> IntOffset.Zero // Fără offset dacă nu face swap
+                        }
 
-                        if (tileType != EMPTY_TILE) { // Desenăm doar piese non-goale
+                        if (tileType != EMPTY_TILE) {
                             GameTile(
-                                type = tileType,
-                                size = tileSize,
+                                type = tileType,       // Pasează tipul piesei curente
+                                size = tileSize,       // Pasează dimensiunea calculată a piesei
                                 isSelected = isSelected,
-                                isDisappearing = isDisappearing, // Pasează starea nouă
+                                isDisappearing = isDisappearing,
+                                animatedOffset = animatedOffset,
                                 onClick = { onTileClick(rowIndex, colIndex) }
                             )
-                        } else {
-                            // Spațiu gol, nu desenăm nimic (sau un placeholder transparent)
-                            Spacer(modifier = Modifier.size(tileSize))
-                        }
+                        } else { /* ... Spacer ... */ }
                     }
                 }
             }
@@ -1082,13 +1146,13 @@ fun GameBoard(
 }
 
 
-
 @Composable
 fun GameTile(
     type: Int,
     size: Dp,
     isSelected: Boolean,
     isDisappearing: Boolean,
+    animatedOffset: IntOffset,
     onClick: () -> Unit
 ) {
     // --- Stare pentru animație ---
@@ -1136,6 +1200,7 @@ fun GameTile(
 
     Box(
         modifier = Modifier
+            .offset { animatedOffset }
             .size(size)
             .padding(1.dp)
             .graphicsLayer(
