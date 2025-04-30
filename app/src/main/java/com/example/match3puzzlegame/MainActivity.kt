@@ -40,6 +40,7 @@ import androidx.compose.ui.res.painterResource // Importat deja, dar verifică
 import androidx.compose.animation.core.VectorConverter // Pentru IntOffset
 import androidx.compose.animation.core.tween // Deja importat? Verifică.
 import androidx.compose.ui.unit.IntOffset // Pentru Modifier.offset
+import androidx.compose.ui.graphics.graphicsLayer // Import pentru translationY și alpha
 
 
 // --- Constante ---
@@ -446,7 +447,7 @@ fun GameScreen() {
         for (r in 0 until ROWS) {
             for (c in 0 until COLS) {
                 if (newBoard[r][c] == EMPTY_TILE) { // Verifică în copie
-                    newBoard[r][c] = TILE_TYPES.random() // Modifică în copie
+                    newBoard[r][c] = -(TILE_TYPES.random()) // Valoare negativă!
                     filledAny = true
                 }
             }
@@ -603,12 +604,17 @@ fun GameScreen() {
             // ---4. Umple spațiile goale ---
             val boardAfterFill =
                 fillEmptyTilesOnBoard(currentBoard) // Funcție nouă care returnează tabla modificată
-            delay(300L)
+            delay(400L)
             board = boardAfterFill
             currentBoard = boardAfterFill
 
+            val boardCleaned = currentBoard.map { row ->
+                row.map { item -> abs(item) }.toMutableList() // Transformă totul în pozitiv
+            }
+            board = boardCleaned // Actualizează starea finală cu valori pozitive
+            currentBoard = boardCleaned // Continuă verificarea cu tabla curățată
+            Log.d(TAG, "Cleaned negative tile markers.")
             Log.d(TAG, "End of cascade $cascadeCount processing loop. Checking for more matches...")
-
         }
         Log.d(TAG, "processMatchesAndCascades finished.")
     }
@@ -1148,42 +1154,76 @@ fun GameBoard(
 
 @Composable
 fun GameTile(
-    type: Int,
+    type: Int, // Poate fi negativ!
     size: Dp,
     isSelected: Boolean,
     isDisappearing: Boolean,
-    animatedOffset: IntOffset,
+    animatedOffset: IntOffset, // Pentru swap
     onClick: () -> Unit
 ) {
-    // --- Stare pentru animație ---
-    val scale = remember { Animatable(1f) } // Scala inițială 1.0
-    val alpha = remember { Animatable(1f) } // Alpha inițial 1.0
+    // --- Stare animație dispariție (scale, alpha) ---
+    val disappearingScale = remember { Animatable(1f) }
+    val disappearingAlpha = remember { Animatable(1f) }
+    // --- Stare animație CĂDERE ---
+    val fallTranslationY = remember { Animatable(0f) } // Offset Y inițial 0
+    val fallAlpha = remember { Animatable(1f) }       // Alpha inițial 1
 
-    // --- Efect care rulează când isDisappearing devine true ---
+    // Determină tipul real și dacă e piesă nouă
+    val actualType = abs(type)
+    val isNewTile = type < 0
+
+    // --- Animație Dispariție ---
     LaunchedEffect(isDisappearing) {
         if (isDisappearing) {
             // Lansează animațiile în paralel
             launch {
-                scale.animateTo(
-                    targetValue = 0.3f, // Se micșorează
-                    animationSpec = tween(durationMillis = 300) // Durata animației
+                disappearingScale.animateTo(
+                    targetValue = 0.3f,
+                    animationSpec = tween(durationMillis = 300)
                 )
             }
             launch {
-                alpha.animateTo(
-                    targetValue = 0f, // Devine transparent
+                disappearingAlpha.animateTo(
+                    targetValue = 0f,
                     animationSpec = tween(durationMillis = 300)
                 )
             }
         } else {
-            // Opcional: Resetează instant dacă nu dispare (de ex, dacă o potrivire e anulată)
-             scale.snapTo(1f)
-             alpha.snapTo(1f)
-            // Sau animat înapoi, dar snap e probabil mai bun
+            // Resetare instantanee dacă nu (mai) dispare
+            // Asigură că piesele care NU dispar sunt vizibile/la scala normală
+            if (disappearingScale.value != 1f) disappearingScale.snapTo(1f)
+            if (disappearingAlpha.value != 1f) disappearingAlpha.snapTo(1f)
         }
     }
 
-    // --- Modificatori ---
+    // --- Animație Cădere ---
+    LaunchedEffect(isNewTile, type) { // Adăugăm și 'type' ca cheie pentru resetare corectă
+        if (isNewTile) {
+            // Stare inițială (deasupra și invizibilă)
+            fallTranslationY.snapTo(-size.value * 2) // Începe de sus
+            fallAlpha.snapTo(0f) // Complet transparent
+            // Animație spre poziția finală
+            launch {
+                fallTranslationY.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(durationMillis = 300, delayMillis = 50)
+                )
+            }
+            launch {
+                fallAlpha.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = 300, delayMillis = 50)
+                )
+            }
+        } else {
+            // Resetare instantanee dacă piesa NU este nouă
+            // (important dacă o piesă existentă cade și nu trebuie să refacă animația de apariție)
+            if (fallTranslationY.value != 0f) fallTranslationY.snapTo(0f)
+            if (fallAlpha.value != 1f) fallAlpha.snapTo(1f)
+        }
+    }
+
+    // --- Modificator selecție ---
     val selectionModifier = if (isSelected) {
         Modifier
             .border(
@@ -1191,45 +1231,48 @@ fun GameTile(
                 color = Color.Yellow,
                 shape = MaterialTheme.shapes.small
             )
-            .scale(1.05f) // Scalarea de la selecție
+            .scale(1.05f)
     } else {
         Modifier
     }
-    val drawableResId = tileDrawables[type]
 
+    // Obține drawable pentru tipul real
+    val drawableResId = tileDrawables[actualType]
 
     Box(
         modifier = Modifier
+            // Aplică offset-ul de la swap
             .offset { animatedOffset }
+            // --- *MODIFICAT* Aplică transformările grafice folosind "this." ---
+            .graphicsLayer {
+                scaleX = disappearingScale.value
+                scaleY = disappearingScale.value
+                // Combină alpha-urile și setează proprietatea scope-ului
+                this.alpha = disappearingAlpha.value * fallAlpha.value
+                translationY = fallTranslationY.value
+            }
+            // --- Restul modificatorilor ---
             .size(size)
             .padding(1.dp)
-            .graphicsLayer(
-                scaleX = scale.value,
-                scaleY = scale.value,
-                alpha = alpha.value
-            )
-            .then(selectionModifier)
-            // Folosim un fundal generic sau cel vechi dacă imaginea nu se încarcă
+            .then(selectionModifier) // Aplică selecția după transformări
             .background(
-                color = tileColors[type]?.copy(alpha = 0.4f) ?: Color.Gray.copy(alpha = 0.4f), // Fundal mai transparent
+                color = tileColors[actualType]?.copy(alpha = 0.4f) ?: Color.Gray.copy(alpha = 0.4f),
                 shape = MaterialTheme.shapes.small
             )
             .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center // Important pentru imagine
+        contentAlignment = Alignment.Center
     ) {
-        // --- *NOU* Afișează imaginea dacă există ---
+        // Afișează imaginea
         if (drawableResId != null) {
             Image(
                 painter = painterResource(id = drawableResId),
-                contentDescription = getIngredientName(type), // Text alternativ pentru accesibilitate
-                modifier = Modifier.fillMaxSize(0.8f) // Umple 80% din box, lasă loc pentru fundal/border
+                contentDescription = getIngredientName(actualType),
+                modifier = Modifier.fillMaxSize(0.8f)
             )
-        } else {
-            // Opcional: Afișează tipul ca text dacă nu avem imagine
-            // Text(type.toString(), color = Color.White)
         }
     }
 }
+
 
 
 
