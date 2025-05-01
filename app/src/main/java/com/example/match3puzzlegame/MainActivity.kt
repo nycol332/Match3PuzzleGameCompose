@@ -305,6 +305,7 @@ fun Match3GameApp() {
     var availableRecipes by remember { mutableStateOf(initialRecipes.toMutableList()) } // Lista rețetelor
     val context = LocalContext.current // Obține contextul aici
     var playerXP by remember { mutableStateOf(0) } // --- Starea pentru Experiență ---
+    var playerMoney by remember { mutableStateOf(100) }
 
 
     // === LOGICA JOCULUI  ===
@@ -795,6 +796,11 @@ fun Match3GameApp() {
         playerXP += xpGained
         Log.d(TAG, "Gained $xpGained XP. Total XP: $playerXP")
 
+        // ---  Acordă Monedă ---
+        val moneyGained = recipe.ingredientsNeeded.size * 15
+        playerMoney += moneyGained
+        Log.d(TAG, "Gained $moneyGained Money. Total Money: $playerMoney")
+
         val updatedProgress = objectiveProgress.toMutableMap() // Copie curentă
         currentLevelData?.objectives?.forEach { objective ->
             if (objective.type == ObjectiveType.COOK_RECIPES && objective.targetId == recipe.id) {
@@ -805,7 +811,7 @@ fun Match3GameApp() {
         }
         objectiveProgress = updatedProgress
 
-        feedbackMessage = "Ai gătit ${recipe.name}! +$xpGained XP"
+        feedbackMessage = "Ai gătit ${recipe.name}! +$xpGained XP, +$moneyGained Bani!"
         selectedRecipeToShow = null
 
         // --- *MODIFICAT* Apelează verificarea CU progresul actualizat ---
@@ -866,7 +872,7 @@ fun Match3GameApp() {
                 tile2Offset.snapTo(IntOffset.Zero) // Resetăm la finalul animației job-ului
             }
 
-            // --- Așteaptă ca AMBELE animații să se termine --- 
+            // --- Așteaptă ca AMBELE animații să se termine ---
             Log.d(TAG, "Waiting for swap animations to join...")
             job1.join() // Așteaptă finalizarea job1
             job2.join() // Așteaptă finalizarea job2
@@ -907,6 +913,7 @@ fun Match3GameApp() {
             isProcessing = isProcessing || !swapAnimationFinished, // Combină stările de blocare
             gameState = gameState,
             playerXP = playerXP, // Pasează XP-ul
+            playerMoney = playerMoney,
             availableRecipesCount = availableRecipes.size, // Numărul de rețete
             swappingTilesInfo = swappingTiles,
             tile1AnimatedOffset = tile1Offset.value,
@@ -984,6 +991,7 @@ fun GameScreen(
     isProcessing: Boolean, // Indică dacă utilizatorul ar trebui blocat
     gameState: String,
     playerXP: Int,
+    playerMoney: Int,
     availableRecipesCount: Int,
     swappingTilesInfo: Pair<TilePosition, TilePosition>?,
     tile1AnimatedOffset: IntOffset,
@@ -1050,6 +1058,21 @@ fun GameScreen(
                     text = availableRecipesCount.toString(),
                     style = MaterialTheme.typography.bodyLarge, // Ajustează stilul dacă vrei
                     fontWeight = FontWeight.Bold
+                )
+            }
+
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                 Image(
+                     painterResource(id = R.drawable.coin),
+                     contentDescription = "Bani",
+                     modifier = Modifier.size(20.dp),
+                 )
+                 Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = playerMoney.toString(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
                 )
             }
         }
