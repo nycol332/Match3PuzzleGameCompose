@@ -74,7 +74,8 @@ data class LevelData(
     val levelId: Int,
     val name: String,
     val objectives: List<LevelObjective>,
-    val maxMoves: Int
+    val maxMoves: Int,
+    val unlocksRecipeIds: List<Int> = emptyList() //  Listă de ID-uri rețete deblocate
 )
 
 // Tipuri posibile de obiective
@@ -131,27 +132,6 @@ val tileDrawables: Map<Int, Int> = mapOf(
 
 //Liste
 
-val initialRecipes = listOf(
-    Recipe(
-        id = 1,
-        name = "Gustare misterioasa",
-        description = "Cucumber + Corn",
-        ingredientsNeeded = mapOf(TILE_TYPE_1 to 5, TILE_TYPE_4 to 3) // 5 Roșii, 3 Mere (exemplu!)
-    ),
-    Recipe(
-        id = 2,
-        name = "Salata misterioasa",
-        description = "Tomato + Corn",
-        ingredientsNeeded = mapOf(TILE_TYPE_2 to 4, TILE_TYPE_4 to 4) // 4 Portocale, 4 Mere
-    ),
-    Recipe(
-        id = 3,
-        name = "Tocăniță Misterioasă",
-        description = "Cucumber + Potato + Onion",
-        ingredientsNeeded = mapOf(TILE_TYPE_1 to 3, TILE_TYPE_5 to 6, TILE_TYPE_3 to 2) // 3 Roșii, 6 Vinete, 2 Afine
-    )
-)
-
 // --- Date Nivele Inițiale ---
 val gameLevels = listOf(
     LevelData(
@@ -160,7 +140,8 @@ val gameLevels = listOf(
         objectives = listOf(
             LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_2, 15) // Colectează 15 Roșii
         ),
-        maxMoves = 20
+        maxMoves = 20,
+        unlocksRecipeIds = listOf(2)
     ),
     LevelData(
         levelId = 2,
@@ -168,7 +149,8 @@ val gameLevels = listOf(
         objectives = listOf(
             LevelObjective(ObjectiveType.COOK_RECIPES, 1, 1) // Gătește Salata Proaspătă (ID 1) o dată
         ),
-        maxMoves = 25
+        maxMoves = 25,
+        unlocksRecipeIds = listOf(3)
     ),
     LevelData(
         levelId = 3,
@@ -177,11 +159,59 @@ val gameLevels = listOf(
             LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_5, 20), // 20 Cartofi
             LevelObjective(ObjectiveType.REACH_SCORE, 0, 5000) // Atinge 5000 puncte
         ),
-        maxMoves = 30
+        maxMoves = 30,
+        unlocksRecipeIds = listOf(4)
+    ),
+    LevelData(
+        levelId = 4,
+        name = "Festivalul Recoltei",
+        objectives = listOf(
+            LevelObjective(ObjectiveType.COOK_RECIPES, 2, 2), // Gătește Garnitura de Porumb de 2 ori
+            LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_4, 30) // 30 Porumb
+        ),
+        maxMoves = 35,
+        unlocksRecipeIds = listOf(5) // Deblochează Supa Cremă (4)
     )
+
+
+
     // Adaugă mai multe nivele
 )
 
+val allPossibleRecipes = listOf(
+    Recipe(
+        id = 1,
+        name = "Salată Proaspătă",
+        description = "Perfectă pentru o zi de vară.",
+        ingredientsNeeded = mapOf(TILE_TYPE_1 to 5, TILE_TYPE_2 to 3, TILE_TYPE_3 to 2) // 5 Castraveți, 3 Roșii, 2 Cepe
+    ),
+    Recipe(
+        id = 2,
+        name = "Garnitură de Porumb",
+        description = "Simplu și gustos.",
+        ingredientsNeeded = mapOf(TILE_TYPE_4 to 8, TILE_TYPE_1 to 2) // 8 Porumb, 2 Castraveți
+    ),
+    Recipe(
+        id = 3,
+        name = "Tocăniță de Legume",
+        description = "Sățioasă și aromată.",
+        ingredientsNeeded = mapOf(TILE_TYPE_5 to 6, TILE_TYPE_2 to 4, TILE_TYPE_3 to 3) // 6 Cartofi, 4 Roșii, 3 Cepe
+    ),
+    // --- Adaugă mai multe rețete aici ---
+    Recipe(
+        id = 4,
+        name = "Supă Cremă de Roșii",
+        description = "Clasică și reconfortantă.",
+        ingredientsNeeded = mapOf(TILE_TYPE_2 to 10, TILE_TYPE_3 to 4) // 10 Roșii, 4 Cepe
+    ),
+    Recipe(
+        id = 5,
+        name = "Cartofi la Cuptor",
+        description = "Cu ierburi aromatice.",
+        ingredientsNeeded = mapOf(TILE_TYPE_5 to 12, TILE_TYPE_3 to 2) // 12 Cartofi, 2 Cepe
+    )
+)
+val initialRecipes = allPossibleRecipes.filter { it.id == 1 }
 
 
 
@@ -271,8 +301,9 @@ fun Match3GameApp() {
     var gameState by remember { mutableStateOf("Playing") }
     var selectedRecipeToShow by remember { mutableStateOf<Recipe?>(null) } // Pentru dialog
     var showRecipeBookScreen by remember { mutableStateOf(false) } // Pentru navigare ecran
-    val availableRecipes by remember { mutableStateOf(initialRecipes) } // Lista rețetelor
+    var availableRecipes by remember { mutableStateOf(initialRecipes.toMutableList()) } // Lista rețetelor
     val context = LocalContext.current // Obține contextul aici
+    var playerXP by remember { mutableStateOf(0) } // --- Starea pentru Experiență ---
 
 
     // === LOGICA JOCULUI  ===
@@ -430,10 +461,40 @@ fun Match3GameApp() {
             // --- CONDIȚIE DE VICTORIE ---
             Log.i(TAG, "Level ${currentLevelData.levelId} WON!")
             gameState = "Won"
+
+            // --- Deblochează Rețete ---
+            val newlyUnlockedRecipes = mutableListOf<String>()
+            currentLevelData.unlocksRecipeIds.forEach { recipeId ->
+
+                Log.d(TAG, "Checking unlock for Recipe ID: $recipeId")
+
+                // Verifică dacă rețeta NU este deja în lista availableRecipes
+                if (availableRecipes.none { it.id == recipeId }) {
+
+                    Log.d(TAG, "Recipe ID $recipeId is NOT already available.")
+
+                    // Găsește rețeta completă în lista globală
+                    allPossibleRecipes.find { it.id == recipeId }?.let { recipeToAdd ->
+                        Log.d(TAG, "Found recipe to add: ${recipeToAdd.name}")
+                        // Adaugă la lista de stare (important: creăm o listă NOUĂ pentru a trigera recompoziția)
+                        availableRecipes = (availableRecipes + recipeToAdd).toMutableList()
+                        newlyUnlockedRecipes.add(recipeToAdd.name)
+                        Log.i(TAG, "Unlocked recipe: ${recipeToAdd.name}. New available list size: ${availableRecipes.size}")
+
+                    }
+                        ?: Log.w(TAG, "Recipe ID $recipeId to unlock not found in allPossibleRecipes!")
+                } else {
+                    Log.d(TAG, "Recipe ID $recipeId IS already available. Skipping.") // LOG NOU
+                }
+            }
+
+            var winMessage = "Nivel ${currentLevelData.levelId} Terminat!"
+            if (newlyUnlockedRecipes.isNotEmpty()) {
+                winMessage += "\nRețete noi: ${newlyUnlockedRecipes.joinToString()}"
+            }
+            feedbackMessage = winMessage
             playSound(context, R.raw.win) // ---  Redă sunetul de victorie ---
             feedbackMessage = "Nivel ${currentLevelData.levelId} Terminat!"
-            // TODO: Afișează un dialog/ecran de victorie
-            // TODO: Pregătește trecerea la nivelul următor (ex: incrementează currentLevelIndex după o acțiune a userului)
         } else if (movesLeft <= 0) {
             // --- CONDIȚIE DE ÎNFRÂNGERE ---
             Log.i(TAG, "Level ${currentLevelData.levelId} LOST! No moves left.")
@@ -719,27 +780,35 @@ fun Match3GameApp() {
         inventory = updatedInventory // Actualizează starea inventarului
         playSound(context, R.raw.gatire) // --- Redă sunetul de gătit ---
 
-        // ---  Actualizează progresul pentru obiectivele de gătit ---
-        val updatedProgress = objectiveProgress.toMutableMap()
-        currentLevelData?.objectives?.forEach { objective ->
-            if (objective.type == ObjectiveType.COOK_RECIPES && objective.targetId == recipe.id) {
-                val currentProg = updatedProgress[objective] ?: 0
-                // Incrementează progresul, limitat la țintă
-                updatedProgress[objective] =
-                    (currentProg + 1).coerceAtMost(objective.targetQuantity)
-                Log.d(
-                    TAG,
-                    "Cook objective progress for ${recipe.name}: ${updatedProgress[objective]}/${objective.targetQuantity}"
-                )
-            }
-        }
-        objectiveProgress = updatedProgress // Aplică actualizările
+        val xpGained = 50 // Exemplu: 50 XP per rețetă
+        playerXP += xpGained
+        Log.d(TAG, "Gained $xpGained XP. Total XP: $playerXP")
 
-        feedbackMessage = "Ai gătit ${recipe.name} cu succes! Delicios!"
+        feedbackMessage = "Ai gătit ${recipe.name}! +$xpGained XP" // Mesaj actualizat
         selectedRecipeToShow = null
+        checkLevelEndCondition()
+
+//        // ---  Actualizează progresul pentru obiectivele de gătit ---
+//        val updatedProgress = objectiveProgress.toMutableMap()
+//        currentLevelData?.objectives?.forEach { objective ->
+//            if (objective.type == ObjectiveType.COOK_RECIPES && objective.targetId == recipe.id) {
+//                val currentProg = updatedProgress[objective] ?: 0
+//                // Incrementează progresul, limitat la țintă
+//                updatedProgress[objective] =
+//                    (currentProg + 1).coerceAtMost(objective.targetQuantity)
+//                Log.d(
+//                    TAG,
+//                    "Cook objective progress for ${recipe.name}: ${updatedProgress[objective]}/${objective.targetQuantity}"
+//                )
+//            }
+//        }
+//        objectiveProgress = updatedProgress // Aplică actualizările
+
+//        feedbackMessage = "Ai gătit ${recipe.name} cu succes! Delicios!"
+//        selectedRecipeToShow = null
 
         // ---  Verifică finalul nivelului DUPĂ gătit ---
-        checkLevelEndCondition()
+//        checkLevelEndCondition()
 
         // TODO: Adaugă aici recompense reale (XP, monedă, etc.)
     }
@@ -747,7 +816,7 @@ fun Match3GameApp() {
 
 
  // --- Resetare la începutul nivelului ---
-    LaunchedEffect(currentLevelData) {
+    LaunchedEffect(currentLevelIndex) {
         Log.d(TAG, "--- LaunchedEffect triggered for level: ${currentLevelData?.levelId} ---") // LOG NOU
         val levelData = gameLevels.getOrNull(currentLevelIndex) // Obține datele aici
         if (levelData != null) {
@@ -758,6 +827,7 @@ fun Match3GameApp() {
             Log.d(TAG, "movesLeft reset to: ${levelData.maxMoves}")
             objectiveProgress = levelData.objectives.associateWith { 0 }
             // ... restul resetărilor ...
+            score = 0
             gameState = "Playing"
         } else {
             Log.e(TAG, "Invalid level index: $currentLevelIndex")
@@ -836,6 +906,8 @@ fun Match3GameApp() {
             tilesBeingMatched = tilesBeingMatched,
             isProcessing = isProcessing || !swapAnimationFinished, // Combină stările de blocare
             gameState = gameState,
+            playerXP = playerXP, // Pasează XP-ul
+            availableRecipesCount = availableRecipes.size, // Numărul de rețete
             swappingTilesInfo = swappingTiles,
             tile1AnimatedOffset = tile1Offset.value,
             tile2AnimatedOffset = tile2Offset.value,
@@ -911,6 +983,8 @@ fun GameScreen(
     tilesBeingMatched: Set<TilePosition>,
     isProcessing: Boolean, // Indică dacă utilizatorul ar trebui blocat
     gameState: String,
+    playerXP: Int,
+    availableRecipesCount: Int,
     swappingTilesInfo: Pair<TilePosition, TilePosition>?,
     tile1AnimatedOffset: IntOffset,
     tile2AnimatedOffset: IntOffset,
@@ -941,7 +1015,28 @@ fun GameScreen(
         }
 
         // --- Afișaj Scor ---
-        Row(verticalAlignment = Alignment.CenterVertically) { /* ... Afișează score ... */ }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween, // Aliniază la capete
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) { // Grup Scor
+                Text("Scor:", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(score.toString(), /* ... stil ... */)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) { // Grup XP
+                Text("XP:", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(playerXP.toString(), /* ... stil ... */)
+            }
+            // Opcional: Poți adăuga și numărul de rețete aici
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(painterResource(id = R.drawable.carte), contentDescription = "Rețete", modifier = Modifier.size(60.dp)) // Adaugă o iconiță de carte
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(availableRecipesCount.toString(), /* ... stil ... */)
+            }
+        }
         Spacer(modifier = Modifier.height(10.dp))
 
         // --- Afișaj Info Nivel ---
