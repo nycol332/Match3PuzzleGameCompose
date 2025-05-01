@@ -41,6 +41,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.systemBarsPadding // Importă modifier-ul
+import android.content.Context // Pentru a accesa resursele
+import android.media.MediaPlayer // Pentru redare audio
+import androidx.compose.ui.platform.LocalContext // Pentru a obține contextul în Composable
+
+
+
+
+
 
 
 //Constante si Data classes
@@ -77,7 +85,10 @@ enum class ObjectiveType {
     // TODO: Adaugă alte tipuri (ex: CLEAR_BLOCKERS - curăță piese speciale)
 }
 
-// --- Constante Globale ---  <<<< ASIGURĂ-TE CĂ ACEST BLOC EXISTĂ AICI
+
+
+
+// --- Constante Globale ---
 const val ROWS = 8
 const val COLS = 8
 const val META_COST = 100
@@ -88,7 +99,7 @@ const val TILE_TYPE_3 = 3
 const val TILE_TYPE_4 = 4
 const val TILE_TYPE_5 = 5
 val TILE_TYPES = listOf(TILE_TYPE_1, TILE_TYPE_2, TILE_TYPE_3, TILE_TYPE_4, TILE_TYPE_5)
-
+private const val TAG = "Match3Game" // TAG pentru Logcat
 
 
 
@@ -175,6 +186,7 @@ val gameLevels = listOf(
 
 
 
+
 //Funcții globale pure
 
 fun getIngredientName(tileType: Int): String {
@@ -188,13 +200,39 @@ fun getIngredientName(tileType: Int): String {
     }
 }
 
+// --- Funcție Helper pentru Redare Sunet ---
+private fun playSound(context: Context, soundResourceId: Int) {
+    // Folosește try-catch pentru a evita crash-uri dacă resursa nu e găsită sau apare altă eroare
+    try {
+        // Creează un MediaPlayer nou PENTRU FIECARE redare a unui sunet scurt.
+        // Nu refolosi același obiect MediaPlayer pentru sunete scurte rapide,
+        // poate cauza probleme de suprapunere sau întârzieri.
+        val mp = MediaPlayer.create(context, soundResourceId)
+        if (mp == null) {
+            Log.e(TAG, "playSound: MediaPlayer.create returned null for resource ID: $soundResourceId")
+            return
+        }
+        mp.setOnCompletionListener { mediaPlayer ->
+            // Eliberează resursele MediaPlayer DUPĂ ce sunetul s-a terminat
+            mediaPlayer?.release()
+            Log.d(TAG, "playSound: MediaPlayer released for resource ID: $soundResourceId")
+        }
+        mp.setOnErrorListener { _, what, extra ->
+            Log.e(TAG, "playSound: MediaPlayer error! what: $what, extra: $extra for resource ID: $soundResourceId")
+            // Încearcă să eliberezi resursele și în caz de eroare
+            mp?.release()
+            true // Indică faptul că am gestionat eroarea
+        }
+        mp.start() // Pornește redarea
+    } catch (e: Exception) {
+        Log.e(TAG, "playSound: Exception while trying to play sound ID: $soundResourceId", e)
+    }
+}
 
-// --- Constante, Data Classes (Recipe, TilePosition, LevelObjective, LevelData), Enum (ObjectiveType) ---
-// --- Map-uri (tileColors, tileDrawables), Liste (TILE_TYPES, initialRecipes, gameLevels) ---
-// --- Funcții globale pure (getIngredientName) ---
-// (Toate acestea rămân la nivel de fișier, în afara oricărei clase sau Composable)
 
-private const val TAG = "Match3Game" // TAG pentru Logcat
+
+
+
 
 // --- MainActivity  ---
 class MainActivity : ComponentActivity() {
@@ -234,8 +272,10 @@ fun Match3GameApp() {
     var selectedRecipeToShow by remember { mutableStateOf<Recipe?>(null) } // Pentru dialog
     var showRecipeBookScreen by remember { mutableStateOf(false) } // Pentru navigare ecran
     val availableRecipes by remember { mutableStateOf(initialRecipes) } // Lista rețetelor
+    val context = LocalContext.current // Obține contextul aici
 
-    // === LOGICA JOCULUI (Funcții Mutate Aici) ===
+
+    // === LOGICA JOCULUI  ===
 
 
     fun findMatchesOnBoard(targetBoard: List<List<Int>>): Set<TilePosition> {
@@ -390,6 +430,7 @@ fun Match3GameApp() {
             // --- CONDIȚIE DE VICTORIE ---
             Log.i(TAG, "Level ${currentLevelData.levelId} WON!")
             gameState = "Won"
+            playSound(context, R.raw.win) // ---  Redă sunetul de victorie ---
             feedbackMessage = "Nivel ${currentLevelData.levelId} Terminat!"
             // TODO: Afișează un dialog/ecran de victorie
             // TODO: Pregătește trecerea la nivelul următor (ex: incrementează currentLevelIndex după o acțiune a userului)
@@ -397,6 +438,7 @@ fun Match3GameApp() {
             // --- CONDIȚIE DE ÎNFRÂNGERE ---
             Log.i(TAG, "Level ${currentLevelData.levelId} LOST! No moves left.")
             gameState = "Lost"
+            playSound(context, R.raw.lost) // --- Redă sunetul de înfrângere ---
             feedbackMessage = "Ai rămas fără mutări! Reîncearcă!"
             // TODO: Afișează un dialog/ecran de înfrângere cu opțiune de Retry
         } else {
@@ -443,6 +485,7 @@ fun Match3GameApp() {
                 break
             }
 
+            playSound(context, R.raw.potrivire)
             tilesBeingMatched = matches
             cascadeCount++
             Log.d(TAG, "Cascade $cascadeCount: Found ${matches.size} matched tiles.")
@@ -563,6 +606,12 @@ fun Match3GameApp() {
             Log.d(TAG, "Cleaned negative tile markers.")
             Log.d(TAG, "End of cascade $cascadeCount processing loop. Checking for more matches...")
         }
+
+        if (totalScoreEarnedThisTurn > 0) {
+            // Sunet opțional pentru adunarea scorului
+            // playSound(context, R.raw.score_tick) // Exemplu
+            score += totalScoreEarnedThisTurn
+        }
         Log.d(TAG, "processMatchesAndCascades finished.")
     }
 
@@ -650,7 +699,7 @@ fun Match3GameApp() {
         return true
     }
 
-    // fun cookRecipe(recipe: Recipe) { /* ... codul funcției, actualizează inventory, objectiveProgress, feedbackMessage, selectedRecipeToShow. Apelează checkLevelEndCondition */ }
+
     fun cookRecipe(recipe: Recipe) {
         if (!canCookRecipe(recipe)) {
             Log.w(TAG, "Attempted to cook ${recipe.name} without enough ingredients!")
@@ -666,14 +715,11 @@ fun Match3GameApp() {
             val currentQuantity = updatedInventory.getOrDefault(ingredientId, 0)
             // Scade cantitatea necesară (asigură-te că nu scazi sub 0, deși canCook a verificat)
             updatedInventory[ingredientId] = (currentQuantity - quantityNeeded).coerceAtLeast(0)
-            // Opcional: elimină intrarea dacă ajunge la 0
-            // if (updatedInventory[ingredientId] == 0) {
-            //     updatedInventory.remove(ingredientId)
-            // }
         }
         inventory = updatedInventory // Actualizează starea inventarului
+        playSound(context, R.raw.gatire) // --- Redă sunetul de gătit ---
 
-        // --- *NOU* Actualizează progresul pentru obiectivele de gătit ---
+        // ---  Actualizează progresul pentru obiectivele de gătit ---
         val updatedProgress = objectiveProgress.toMutableMap()
         currentLevelData?.objectives?.forEach { objective ->
             if (objective.type == ObjectiveType.COOK_RECIPES && objective.targetId == recipe.id) {
@@ -728,10 +774,10 @@ fun Match3GameApp() {
         val tiles = swappingTiles
         if (tiles != null) {
             Log.d(TAG, "LaunchedEffect: Animating swap for $tiles")
+            playSound(context, R.raw.swap)
             val (pos1, pos2) = tiles
             val xDiff = (pos2.col - pos1.col)
             val yDiff = (pos2.row - pos1.row)
-
             // Lansăm animațiile și PĂSTRĂM referințele la Job-uri
             val job1 = scope.launch {
                 tile1Offset.snapTo(IntOffset.Zero)
@@ -774,7 +820,7 @@ fun Match3GameApp() {
             canCookChecker = ::canCookRecipe, // Pasează referința la funcție
             onCookRecipe = ::cookRecipe,      // Pasează referința la funcție
             onShowRecipeDetails = { recipe -> selectedRecipeToShow = recipe }, // Setează starea pt dialog
-            onClose = { showRecipeBookScreen = false } // Modifică starea de navigare
+            onClose = { playSound(context, R.raw.click); showRecipeBookScreen = false } // Modifică starea de navigare
         )
     } else {
         GameScreen(
@@ -795,6 +841,7 @@ fun Match3GameApp() {
             tile2AnimatedOffset = tile2Offset.value,
             // Callback-uri
             onTileClick = { row, col -> // Logica de click e acum aici sau în swapTiles
+                playSound(context, R.raw.click)
                 val clickedPos = TilePosition(row, col)
                 val currentSelection = selectedTilePos
                 if (currentSelection == null) { selectedTilePos = clickedPos }
@@ -811,9 +858,26 @@ fun Match3GameApp() {
                     } else { selectedTilePos = clickedPos }
                 }
             },
-            onShowRecipeBook = { showRecipeBookScreen = true }, // Modifică starea de navigare
-            onMetaButtonClick = { /* TODO: Definește logica butonului meta */ }
-            // Nu mai pasăm onCookRecipe sau canCookChecker AICI
+            onShowRecipeBook = {  playSound(context, R.raw.click); showRecipeBookScreen = true }, // Modifică starea de navigare
+            onMetaButtonClick = {  playSound(context, R.raw.click) },
+            onRetryLevel = {
+                playSound(context, R.raw.click)
+                val currentIdx = currentLevelIndex
+                currentLevelIndex = -1 // Index invalid temporar
+                scope.launch {
+                    delay(50)
+                    currentLevelIndex = currentIdx
+                }
+            },
+            onNextLevel = {
+                playSound(context, R.raw.click)
+                // Logica next level
+                if (currentLevelIndex < gameLevels.size - 1) {
+                    currentLevelIndex++
+                } else {
+                    gameState = "Finished"
+                }
+            }
         )
     }
 
@@ -825,14 +889,14 @@ fun Match3GameApp() {
             inventory = inventory,
             canCookChecker = ::canCookRecipe,
             onCook = ::cookRecipe, // Folosește funcția de gătit definită aici
-            onDismiss = { selectedRecipeToShow = null } // Închide dialogul
+            onDismiss = { playSound(context, R.raw.click); selectedRecipeToShow = null } // Închide dialogul
         )
     }
 
 }
 
 
-// --- GameScreen Composable (Simplificat - primește totul ca parametri) ---
+// --- GameScreen Composable ---
 @Composable
 fun GameScreen(
     // Date de afișat
@@ -853,15 +917,28 @@ fun GameScreen(
     // Callback-uri
     onTileClick: (row: Int, col: Int) -> Unit,
     onShowRecipeBook: () -> Unit,
-    onMetaButtonClick: () -> Unit
+    onMetaButtonClick: () -> Unit,
+    onRetryLevel: () -> Unit,
+    onNextLevel: () -> Unit
 ) {
+    val context = LocalContext.current // Obține context
     Column(
         modifier = Modifier.fillMaxSize().systemBarsPadding().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // --- Afișare Stare Joc (Victorie/Înfrângere) ---
-        if (gameState == "Won") { /* ... Text Victorie + Buton Next ... */ }
-        else if (gameState == "Lost") { /* ... Text Înfrângere + Buton Retry ... */ }
+        if (gameState == "Won") {
+            Button(onClick = {
+                playSound(context, R.raw.click) // Sunet click UI !!!
+                onNextLevel()
+            }) { Text("Nivelul Următor") }
+        }
+        else if (gameState == "Lost") {
+            Button(onClick = {
+                playSound(context, R.raw.click) // Sunet click UI !!!
+                onRetryLevel()
+            }) { Text("Reîncearcă Nivelul") }
+        }
 
         // --- Afișaj Scor ---
         Row(verticalAlignment = Alignment.CenterVertically) { /* ... Afișează score ... */ }
@@ -874,7 +951,10 @@ fun GameScreen(
         }
 
         // --- Buton Meta ---
-        Button(onClick = onMetaButtonClick, enabled = false /* Sau logica ta */) { Text("Îmbunătățiri (în curând)") }
+        Button(onClick = {
+            playSound(context, R.raw.click) // Sunet click UI !!!
+            onMetaButtonClick()
+        }, enabled = false) { Text("Îmbunătățiri (în curând)") }
         Spacer(modifier = Modifier.height(8.dp))
 
         // --- Mesaj Feedback ---
@@ -933,7 +1013,10 @@ fun GameScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // --- Buton Carte Bucate ---
-        Button(onClick = onShowRecipeBook) { Text("Carte de Bucate") }
+        Button(onClick = {
+            playSound(context, R.raw.click) // !!! Sunet click UI !!!
+            onShowRecipeBook()
+        }) { Text("Carte de Bucate") }
         Spacer(modifier = Modifier.height(16.dp))
 
         // --- Tabla de Joc ---
@@ -947,6 +1030,7 @@ fun GameScreen(
                 tile2AnimatedOffset = tile2AnimatedOffset,
                 onTileClick = { row, col ->
                     if (gameState == "Playing" && !isProcessing) { // Permite click doar dacă se joacă și nu se procesează
+                        playSound(context, R.raw.click) // Sunet click piesă !!!
                         onTileClick(row, col)
                     }
                 }
@@ -968,13 +1052,16 @@ fun RecipeBookScreen(
 ) {
     // NU mai are nevoie de stare locală pentru dialog
     // var recipeForDialog by remember { mutableStateOf<Recipe?>(null) }
-
+    val context = LocalContext.current
     Column(  modifier = Modifier
         .fillMaxSize()
         .systemBarsPadding()
         .padding(16.dp) ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) { Icon(Icons.Default.ArrowBack, contentDescription = "Înapoi") }
+            IconButton(onClick = {
+                playSound(context, R.raw.click) // Sunet UI
+                onClose()
+            }) { Icon(Icons.Default.ArrowBack, contentDescription = "Înapoi") }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Cartea Mea de Bucate", style = MaterialTheme.typography.headlineSmall)
         }
@@ -984,7 +1071,10 @@ fun RecipeBookScreen(
             items(recipes, key = { it.id }) { recipe ->
                 val canCook = remember(inventory, recipe) { canCookChecker(recipe) }
                 Column(
-                    modifier = Modifier
+                    modifier = Modifier.clickable {
+                        playSound(context, R.raw.click) // Sunet UI
+                        onShowRecipeDetails(recipe)
+                    }
                         .fillMaxWidth()
                         .clickable { onShowRecipeDetails(recipe) } // Apelează callback-ul pentru dialog
                         .padding(vertical = 8.dp)
@@ -1012,7 +1102,7 @@ fun RecipeDetailDialog(
     onDismiss: () -> Unit // Funcția de apelat la închiderea dialogului
 ) {
     val canCookCurrentRecipe = remember(inventory, recipe) { canCookChecker(recipe) } // Verifică dacă se poate găti
-
+    val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss, // Apelează funcția primită
         title = { Text(text = recipe.name) },
