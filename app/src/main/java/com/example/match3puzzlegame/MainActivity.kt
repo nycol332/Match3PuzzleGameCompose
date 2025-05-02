@@ -88,6 +88,14 @@ enum class ObjectiveType {
     // TODO: Adaugă alte tipuri (ex: CLEAR_BLOCKERS - curăță piese speciale)
 }
 
+// --- Structura pentru Upgrade-uri ---
+data class UpgradeInfo(
+    val id: String, // Folosim String ID pentru flexibilitate (ex: "extra_moves", "faster_cooking")
+    val name: String,
+    val description: (Int) -> String, // Funcție pentru a genera descrierea bazată pe nivel
+    val maxLevel: Int,
+    val cost: (Int) -> Int // Funcție pentru a calcula costul nivelului următor (nivel curent -> cost)
+)
 
 
 
@@ -133,6 +141,34 @@ val tileDrawables: Map<Int, Int> = mapOf(
 
 
 //Liste
+
+// --- Lista de Upgrade-uri Posibile ---
+val availableUpgrades = listOf(
+    UpgradeInfo(
+        id = "extra_moves",
+        name = "Mutări Bonus",
+        description = { level -> "Începi fiecare nivel cu +$level mutări." },
+        maxLevel = 5,
+        cost = { level -> 100 * (level + 1) * (level + 1) } // Exemplu: 100, 400, 900, 1600, 2500 Bani
+    ),
+    UpgradeInfo(
+        id = "score_multiplier",
+        name = "Multiplicator Scor",
+        description = { level -> "Primești ${10 * level}% scor bonus." }, // Efectul va fi implementat mai târziu
+        maxLevel = 10,
+        cost = { level -> 150 + 200 * level } // Exemplu: 150, 350, 550... Bani
+    ),
+    UpgradeInfo(
+        id = "rare_ingredient_luck",
+        name = "Noroc la Ingrediente",
+        description = { level -> "Șansă +${5 * level}% să apară ingrediente mai rare." }, // Efectul va fi implementat mai târziu
+        maxLevel = 4,
+        cost = { level -> 500 * (level + 1) } // Exemplu: 500, 1000, 1500, 2000 Bani
+    )
+    // TODO: Adaugă upgrade-uri cosmetice, de combustibil, etc.
+)
+
+
 
 // --- Date Nivele Inițiale ---
 val gameLevels = listOf(
@@ -314,11 +350,11 @@ fun Match3GameApp() {
     var playerMoney by remember { mutableStateOf(100) }
     var cookedMealsInventory by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }  // --- Stare pentru Mâncarea Gătită, gata de vânzare ---
     var showShopDialog by remember { mutableStateOf(false) }
+    var playerUpgrades by remember { mutableStateOf<Map<String, Int>>(emptyMap()) } // Map<UpgradeId, CurrentLevel>
+    var showUpgradesScreen by remember { mutableStateOf(false) }// --- Stare pentru ecranul de upgrade-uri ---
 
 
     // === LOGICA JOCULUI  ===
-
-
 
 
     // ---  Funcție pentru Vânzarea Mâncărurilor ---
@@ -867,6 +903,33 @@ fun Match3GameApp() {
         checkLevelEndCondition(updatedProgress) // Pasează map-ul actualizat
     }
 
+    // ---  Funcție pentru a trece la nivelul următor ---
+    fun goToNextLevel() {
+        Log.d(TAG, "goToNextLevel called. Current index: $currentLevelIndex")
+        playSound(context, R.raw.click) // Sunetul aici
+        if (currentLevelIndex < gameLevels.size - 1) {
+            currentLevelIndex++ // Incrementează starea
+            Log.d(TAG, "Moving to next level index: $currentLevelIndex")
+        } else {
+            Log.d(TAG, "All levels finished!")
+            gameState = "Finished" // Setează starea de final joc
+            feedbackMessage = "Felicitări! Ai terminat jocul!" // Mesaj final
+        }
+    }
+
+    // --- Funcție pentru a reîncerca nivelul ---
+    fun retryLevel() {
+        Log.d(TAG, "retryLevel called.")
+        playSound(context, R.raw.click)
+        // Folosim trucul pentru a retrigera LaunchedEffect
+        val currentIdx = currentLevelIndex
+        currentLevelIndex = -1 // Invalid temporar
+        scope.launch {
+            delay(50)
+            currentLevelIndex = currentIdx // Revine, retrigerează resetarea
+        }
+    }
+
 
 
  // --- Resetare la începutul nivelului ---
@@ -990,25 +1053,23 @@ fun Match3GameApp() {
             },
             onShowRecipeBook = {  playSound(context, R.raw.click); showRecipeBookScreen = true }, // Modifică starea de navigare
             onMetaButtonClick = {  playSound(context, R.raw.click) },
-            onRetryLevel = {
+            onRetryLevel = ::retryLevel,
+            onNextLevel = ::goToNextLevel,
+            onShowUpgrades = { // Logica pentru butonul de upgrade
                 playSound(context, R.raw.click)
-                val currentIdx = currentLevelIndex
-                currentLevelIndex = -1 // Index invalid temporar
-                scope.launch {
-                    delay(50)
-                    currentLevelIndex = currentIdx
-                }
-            },
-            onNextLevel = {
-                playSound(context, R.raw.click)
-                // Logica next level
-                if (currentLevelIndex < gameLevels.size - 1) {
-                    currentLevelIndex++
-                } else {
-                    gameState = "Finished"
-                }
+                showUpgradesScreen = true // Setează starea pentru a arăta ecranul (îl vom implementa)
             }
         )
+    }
+
+    if (showUpgradesScreen) {
+        // TODO: Înlocuiește cu apelul real la UpgradesScreen
+        Box(modifier = Modifier.fillMaxSize().background(Color.DarkGray.copy(alpha=0.5f)).clickable { showUpgradesScreen = false } ) {
+            Text("Ecran Upgrade-uri (TODO)", color = Color.White, modifier = Modifier.align(Alignment.Center))
+            Button(onClick = { showUpgradesScreen = false }, modifier = Modifier.align(Alignment.TopStart)) {
+                Text("Înapoi")
+            }
+        }
     }
 
     // --- Afișează dialogul PESTE orice ecran ---
@@ -1034,8 +1095,6 @@ fun Match3GameApp() {
             onDismiss = { showShopDialog = false } // Închide dialogul la dismiss
         )
     }
-
-
 }
 
 
@@ -1068,6 +1127,7 @@ fun GameScreen(
     onNextLevel: () -> Unit,
     currentLevelId: Int, //  Primește ID-ul nivelului curent
     onShowShop: () -> Unit, // Callback pentru shop
+    onShowUpgrades: () -> Unit
 ) {
     val context = LocalContext.current // Obține context
 
@@ -1109,6 +1169,24 @@ fun GameScreen(
                 Text("XP:", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(playerXP.toString(), /* ... stil ... */) }
+
+
+            // --- Grup Bani (Monedă) ---
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painterResource(id = R.drawable.coin),
+                    contentDescription = "Bani",
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = playerMoney.toString(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+
+
             // Grup Rețete (cu iconiță)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -1126,6 +1204,7 @@ fun GameScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+
             // --- Grup Shop (Iconiță Clickabilă) ---
             IconButton(onClick = { // Folosim IconButton pentru o zonă de click mai bună
                 playSound(context, R.raw.click) // Sunet UI
@@ -1139,21 +1218,19 @@ fun GameScreen(
                 )
             }
 
-
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                 Image(
-                     painterResource(id = R.drawable.coin),
-                     contentDescription = "Bani",
-                     modifier = Modifier.size(20.dp),
-                 )
-                 Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = playerMoney.toString(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
+            // --- Grup Upgrade-uri (Iconiță Clickabilă) ---
+            IconButton(onClick = {
+                playSound(context, R.raw.click)
+                onShowUpgrades() // Apelează noul callback
+            }) {
+                Image( // Sau Icon
+                    painter = painterResource(id = R.drawable.upgrade), // !!! ID-ul tău !!!
+                    contentDescription = "Îmbunătățiri",
+                    modifier = Modifier.size(30.dp) // Ajustează dimensiunea
                 )
             }
+
+
         }
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1206,13 +1283,6 @@ fun GameScreen(
         }
 
         // --- Rând Butoane (Meta & Carte Bucate) ---
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Button(onClick = onMetaButtonClick, enabled = false, modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) { Text("Îmbunătățiri curand") } // Text mai scurt
-        }
-        Spacer(modifier = Modifier.height(8.dp))
 
         // --- Mesaj Feedback (poate font mai mic?) ---
         Text(text = feedbackMessage, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().heightIn(min = 18.dp), fontSize = 15.sp)
