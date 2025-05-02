@@ -58,7 +58,8 @@ data class Recipe(
     val id: Int, // Identificator unic
     val name: String,
     val description: String,
-    val ingredientsNeeded: Map<Int, Int>
+    val ingredientsNeeded: Map<Int, Int>,
+    val sellingPrice: Int
 )
 
 data class TilePosition(val row: Int, val col: Int)
@@ -184,33 +185,38 @@ val allPossibleRecipes = listOf(
         id = 1,
         name = "Salată Proaspătă",
         description = "Perfectă pentru o zi de vară.",
-        ingredientsNeeded = mapOf(TILE_TYPE_1 to 5, TILE_TYPE_2 to 3, TILE_TYPE_3 to 2) // 5 Castraveți, 3 Roșii, 2 Cepe
+        ingredientsNeeded = mapOf(TILE_TYPE_1 to 5, TILE_TYPE_2 to 3, TILE_TYPE_3 to 2), // 5 Castraveți, 3 Roșii, 2 Cepe
+        sellingPrice = 30
     ),
     Recipe(
         id = 2,
         name = "Garnitură de Porumb",
         description = "Simplu și gustos.",
-        ingredientsNeeded = mapOf(TILE_TYPE_4 to 8, TILE_TYPE_1 to 2) // 8 Porumb, 2 Castraveți
+        ingredientsNeeded = mapOf(TILE_TYPE_4 to 8, TILE_TYPE_1 to 2), // 8 Porumb, 2 Castraveți
+        sellingPrice = 45
     ),
     Recipe(
         id = 3,
         name = "Tocăniță de Legume",
         description = "Sățioasă și aromată.",
-        ingredientsNeeded = mapOf(TILE_TYPE_5 to 6, TILE_TYPE_2 to 4, TILE_TYPE_3 to 3) // 6 Cartofi, 4 Roșii, 3 Cepe
-    ),
+        ingredientsNeeded = mapOf(TILE_TYPE_5 to 6, TILE_TYPE_2 to 4, TILE_TYPE_3 to 3), // 6 Cartofi, 4 Roșii, 3 Cepe
+        sellingPrice = 70
+        ),
     // --- Adaugă mai multe rețete aici ---
     Recipe(
         id = 4,
         name = "Supă Cremă de Roșii",
         description = "Clasică și reconfortantă.",
-        ingredientsNeeded = mapOf(TILE_TYPE_2 to 10, TILE_TYPE_3 to 4) // 10 Roșii, 4 Cepe
-    ),
+        ingredientsNeeded = mapOf(TILE_TYPE_2 to 10, TILE_TYPE_3 to 4), // 10 Roșii, 4 Cepe
+        sellingPrice = 55
+        ),
     Recipe(
         id = 5,
         name = "Cartofi la Cuptor",
         description = "Cu ierburi aromatice.",
-        ingredientsNeeded = mapOf(TILE_TYPE_5 to 12, TILE_TYPE_3 to 2) // 12 Cartofi, 2 Cepe
-    )
+        ingredientsNeeded = mapOf(TILE_TYPE_5 to 12, TILE_TYPE_3 to 2), // 12 Cartofi, 2 Cepe
+        sellingPrice = 60
+        )
 )
 val initialRecipes = allPossibleRecipes.filter { it.id == 1 }
 
@@ -306,9 +312,49 @@ fun Match3GameApp() {
     val context = LocalContext.current // Obține contextul aici
     var playerXP by remember { mutableStateOf(0) } // --- Starea pentru Experiență ---
     var playerMoney by remember { mutableStateOf(100) }
+    var cookedMealsInventory by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }  // --- Stare pentru Mâncarea Gătită, gata de vânzare ---
+    var showShopDialog by remember { mutableStateOf(false) }
 
 
     // === LOGICA JOCULUI  ===
+
+
+
+
+    // ---  Funcție pentru Vânzarea Mâncărurilor ---
+    fun sellCookedMeals() {
+        if (cookedMealsInventory.isEmpty()) {
+            Log.d(TAG, "Sell attempt but cooked inventory is empty.")
+            feedbackMessage = "Nu ai ce vinde!"
+            return
+        }
+
+        var moneyEarned = 0
+        cookedMealsInventory.forEach { (recipeId, quantity) ->
+            // Găsește prețul rețetei
+            val recipe = allPossibleRecipes.find { it.id == recipeId } // Folosim lista globală
+            if (recipe != null) {
+                moneyEarned += recipe.sellingPrice * quantity
+            } else {
+                Log.w(TAG, "Could not find recipe data for ID $recipeId during selling.")
+            }
+        }
+
+        Log.d(TAG, "Selling all cooked meals. Earned: $moneyEarned Money.")
+
+        // Actualizează banii jucătorului
+        playerMoney += moneyEarned
+
+        // Golește inventarul de mâncare gătită
+        cookedMealsInventory = emptyMap()
+
+        // Oferă feedback
+        feedbackMessage = "Ai vândut marfa pentru $moneyEarned Bani!"
+
+        // TODO: Redă un sunet de "casa de marcat" sau similar
+        playSound(context, R.raw.coin) // Folosim sunetul de monedă existent? Sau altul?
+    }
+
 
 
     fun findMatchesOnBoard(targetBoard: List<List<Int>>): Set<TilePosition> {
@@ -797,9 +843,12 @@ fun Match3GameApp() {
         Log.d(TAG, "Gained $xpGained XP. Total XP: $playerXP")
 
         // ---  Acordă Monedă ---
-        val moneyGained = recipe.ingredientsNeeded.size * 15
-        playerMoney += moneyGained
-        Log.d(TAG, "Gained $moneyGained Money. Total Money: $playerMoney")
+
+        val currentCookedAmount = cookedMealsInventory.getOrDefault(recipe.id, 0)
+        val updatedCookedInventory = cookedMealsInventory.toMutableMap()
+        updatedCookedInventory[recipe.id] = currentCookedAmount + 1
+        cookedMealsInventory = updatedCookedInventory // Actualizează starea cookedMealsInventory
+        Log.d(TAG, "Added ${recipe.name} to cooked inventory. New cooked inv: $cookedMealsInventory")
 
         val updatedProgress = objectiveProgress.toMutableMap() // Copie curentă
         currentLevelData?.objectives?.forEach { objective ->
@@ -811,10 +860,10 @@ fun Match3GameApp() {
         }
         objectiveProgress = updatedProgress
 
-        feedbackMessage = "Ai gătit ${recipe.name}! +$xpGained XP, +$moneyGained Bani!"
+        feedbackMessage = "Ai gătit ${recipe.name}! +$xpGained XP"
         selectedRecipeToShow = null
 
-        // --- *MODIFICAT* Apelează verificarea CU progresul actualizat ---
+        // ---  Apelează verificarea CU progresul actualizat ---
         checkLevelEndCondition(updatedProgress) // Pasează map-ul actualizat
     }
 
@@ -918,6 +967,8 @@ fun Match3GameApp() {
             swappingTilesInfo = swappingTiles,
             tile1AnimatedOffset = tile1Offset.value,
             tile2AnimatedOffset = tile2Offset.value,
+            currentLevelId = currentLevelData?.levelId ?: 0, // Pasează ID-ul nivelului
+            onShowShop = { showShopDialog = true },
             // Callback-uri
             onTileClick = { row, col -> // Logica de click e acum aici sau în swapTiles
                 playSound(context, R.raw.click)
@@ -961,7 +1012,6 @@ fun Match3GameApp() {
     }
 
     // --- Afișează dialogul PESTE orice ecran ---
-    // (selectedRecipeToShow este o stare din Match3GameApp acum)
     if (selectedRecipeToShow != null) {
         RecipeDetailDialog(
             recipe = selectedRecipeToShow!!,
@@ -971,6 +1021,20 @@ fun Match3GameApp() {
             onDismiss = { playSound(context, R.raw.click); selectedRecipeToShow = null } // Închide dialogul
         )
     }
+
+    // --- Afișare Dialog Shop ---
+    if (showShopDialog) {
+        ShopDialog(
+            cookedMeals = cookedMealsInventory,
+            recipesData = allPossibleRecipes, // Pasează lista completă pentru prețuri/nume
+            onSellAll = {
+                sellCookedMeals() // Apelează logica de vânzare
+                showShopDialog = false // Închide dialogul după vânzare
+            },
+            onDismiss = { showShopDialog = false } // Închide dialogul la dismiss
+        )
+    }
+
 
 }
 
@@ -1001,7 +1065,9 @@ fun GameScreen(
     onShowRecipeBook: () -> Unit,
     onMetaButtonClick: () -> Unit,
     onRetryLevel: () -> Unit,
-    onNextLevel: () -> Unit
+    onNextLevel: () -> Unit,
+    currentLevelId: Int, //  Primește ID-ul nivelului curent
+    onShowShop: () -> Unit, // Callback pentru shop
 ) {
     val context = LocalContext.current // Obține context
 
@@ -1060,6 +1126,19 @@ fun GameScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+            // --- Grup Shop (Iconiță Clickabilă) ---
+            IconButton(onClick = { // Folosim IconButton pentru o zonă de click mai bună
+                playSound(context, R.raw.click) // Sunet UI
+                onShowShop() // Deschide dialogul Shop
+            }) {
+                Image( // Sau Icon dacă preferi și ai setat tint/size
+                    painter = painterResource(id = R.drawable.market),
+                    contentDescription = "Magazin (Vinde Produse)",
+                    modifier = Modifier.size(32.dp) // Ajustează dimensiunea
+                    // Nu folosi tint dacă e PNG colorat
+                )
+            }
+
 
 
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1076,7 +1155,6 @@ fun GameScreen(
                 )
             }
         }
-        // --- *REDUCE* Spațiul după rândul superior ---
         Spacer(modifier = Modifier.height(8.dp))
 
         // --- Rând Info Nivel: Mutări și Obiective Compacte ---
@@ -1124,7 +1202,6 @@ fun GameScreen(
                     // TODO: Poți adăuga un mic indicator dacă sunt MAI MULTE obiective
                 }
             }
-            // --- *REDUCE/ELIMINĂ* Spațiul aici ---
             Spacer(modifier = Modifier.height(8.dp))
         }
 
@@ -1134,24 +1211,31 @@ fun GameScreen(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             Button(onClick = onMetaButtonClick, enabled = false, modifier = Modifier.weight(1f).padding(horizontal = 4.dp)) { Text("Îmbunătățiri curand") } // Text mai scurt
-
         }
-        // --- *REDUCE* Spațiul ---
         Spacer(modifier = Modifier.height(8.dp))
 
         // --- Mesaj Feedback (poate font mai mic?) ---
         Text(text = feedbackMessage, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().heightIn(min = 18.dp), fontSize = 15.sp)
-        // --- *REDUCE* Spațiul ---
         Spacer(modifier = Modifier.height(8.dp))
 
         // --- Afișaj Inventar (poate mai compact?) ---
-        // Poți reduce dimensiunea iconițelor (ex: 24.dp) sau spațierea în Row-ul inventarului dacă e necesar
-
         Text("Inventar:", style = MaterialTheme.typography.labelLarge) // Font mai mic
         Spacer(modifier = Modifier.height(2.dp))
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal=4.dp), horizontalArrangement = Arrangement.Center) { /* ... cod inventar (poate cu size=24.dp la Image) ... */ }
-        // --- *REDUCE* Spațiul ---
         Spacer(modifier = Modifier.height(10.dp))
+
+
+        // Afișează butonul pentru piata
+        val shouldShowShopButton = currentLevelId == 1
+        // Sau poți folosi gameState == "Won" și o condiție pe levelId
+        if (shouldShowShopButton && gameState == "Playing") { // Sau la final de nivel? Momentan în timpul jocului
+            Spacer(modifier = Modifier.height(10.dp))
+
+        }
+
+
+
+
 
 
         // --- Tabla de Joc ---
@@ -1480,15 +1564,90 @@ fun GameTile(
     }
 }
 
+
+
+
+// --- Composable pentru Dialogul Shop ---
+@Composable
+fun ShopDialog(
+    cookedMeals: Map<Int, Int>, // Inventarul de mâncare gătită <RecipeId, Quantity>
+    recipesData: List<Recipe>, // Avem nevoie de datele rețetelor pentru nume și preț
+    onSellAll: () -> Unit, // Funcția de apelat la apăsarea "Vinde Tot"
+    onDismiss: () -> Unit // Funcția de apelat la închiderea dialogului
+) {
+    // Calculează valoarea totală a mărfii (opțional, pentru afișare)
+    var totalValue = 0
+    cookedMeals.forEach { (recipeId, quantity) ->
+        val recipe = recipesData.find { it.id == recipeId }
+        if (recipe != null) {
+            totalValue += recipe.sellingPrice * quantity
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Piața Locală (Magazin)") },
+        text = {
+            Column {
+                if (cookedMeals.isEmpty()) {
+                    Text("Nu ai pregătit nimic de vânzare încă!")
+                } else {
+                    Text("Produse gata de vânzare:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // Listează produsele gătite
+                    LazyColumn { // Folosim LazyColumn dacă lista poate fi lungă
+                        items(cookedMeals.entries.toList(), key = { it.key }) { (recipeId, quantity) ->
+                            val recipe = recipesData.find { it.id == recipeId }
+                            if (recipe != null) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        // Iconiță mică a ingredientului principal (sau a rețetei?) - Simplificare: folosim primul ingredient
+                                        val firstIngredientId = recipe.ingredientsNeeded.keys.firstOrNull()
+                                        val drawableResId = if(firstIngredientId != null) tileDrawables[firstIngredientId] else null
+                                        if (drawableResId != null) {
+                                            Image(painterResource(id = drawableResId), contentDescription = null, modifier = Modifier.size(24.dp))
+                                        } else {
+                                            Box(Modifier.size(24.dp)) // Placeholder
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("${recipe.name} x $quantity")
+                                    }
+                                    Text("+${recipe.sellingPrice * quantity} Bani", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Valoare Totală: $totalValue Bani", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                Button(
+                    onClick = onSellAll,
+                    enabled = cookedMeals.isNotEmpty() // Activează doar dacă e ceva de vândut
+                ) {
+                    Text("Vinde Tot")
+                }
+                Spacer(Modifier.width(8.dp))
+                TextButton(onClick = onDismiss) {
+                    Text("Închide")
+                }
+            }
+        }
+    )
+}
+
 // --- Preview-uri (Poți crea preview-uri separate pentru GameScreen și RecipeBookScreen dacă vrei) ---
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
     Match3PuzzleGameTheme {
-        // Previzualizează aplicația principală
         Match3GameApp()
-        // Sau previzualizează un ecran specific cu date mock
-        // GameScreen(/* date mock */)
-        // RecipeBookScreen(/* date mock */)
     }
 }
