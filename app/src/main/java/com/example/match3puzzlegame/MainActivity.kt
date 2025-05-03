@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.match3puzzlegame.ui.theme.Match3PuzzleGameTheme
@@ -46,6 +47,7 @@ import android.media.MediaPlayer // Pentru redare audio
 import androidx.compose.ui.platform.LocalContext // Pentru a obține contextul în Composable
 import androidx.compose.foundation.rememberScrollState // Pentru starea scroll-ului
 import androidx.compose.foundation.verticalScroll // Pentru modifier-ul de scroll
+import androidx.compose.ui.platform.LocalDensity
 
 
 
@@ -352,7 +354,7 @@ fun Match3GameApp() {
     var showShopDialog by remember { mutableStateOf(false) }
     var playerUpgrades by remember { mutableStateOf<Map<String, Int>>(emptyMap()) } // Map<UpgradeId, CurrentLevel>
     var showUpgradesScreen by remember { mutableStateOf(false) }// --- Stare pentru ecranul de upgrade-uri ---
-
+    val density = LocalDensity.current // *NOU* Obține densitatea ecranului
 
     // === LOGICA JOCULUI  ===
 
@@ -602,6 +604,67 @@ fun Match3GameApp() {
         }
     }
 
+
+    // --- Funcție care gestionează logica click-ului pe piesă ---
+    fun handleTileClick(row: Int, col: Int) {
+        // Pune TOATĂ logica din vechiul onTileClick aici
+        if (isProcessing || !swapAnimationFinished || gameState != "Playing") {
+            Log.d(
+                TAG,
+                "Click ignorat: processing=$isProcessing, animFinished=$swapAnimationFinished, state=$gameState"
+            )
+            // Folosim 'return' simplu pentru a ieși din funcție
+            return
+        }
+
+        val clickedPos = TilePosition(row, col)
+        // --- Accesăm direct starea din Match3GameApp ---
+        val currentSelection = selectedTilePos
+
+        Log.d(TAG, "handleTileClick: ($row, $col). Current selection: $currentSelection")
+        playSound(context, R.raw.click) // Sunet click piesă
+
+        // --- Funcție Helper pentru Adiacență ---
+        fun areAdjacent(pos1: TilePosition, pos2: TilePosition): Boolean {
+            val rowDiff = abs(pos1.row - pos2.row)
+            val colDiff = abs(pos1.col - pos2.col)
+            return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1)
+        }
+        if (currentSelection == null) {
+            selectedTilePos = clickedPos // Modifică starea direct
+            feedbackMessage = "Selectat: ($row, $col)"
+        } else {
+            if (clickedPos == currentSelection) {
+                selectedTilePos = null
+                feedbackMessage = "Deselectat"
+            } else if (areAdjacent(currentSelection, clickedPos)) { // Apelează funcția helper
+                // --- SWAP INIȚIAT ---
+                Log.d(TAG, "Adjacent click detected. Initiating swap attempt.")
+
+                // Consumă mutarea
+                if (movesLeft > 0) {
+                    movesLeft = movesLeft - 1 // Modifică starea direct
+                    Log.d(TAG, "Move consumed on swap attempt. Moves left NOW: $movesLeft")
+
+                    // Inițiază animația
+                    selectedTilePos = null
+                    feedbackMessage = "Schimbare..."
+                    swappingTiles = Pair(currentSelection, clickedPos) // Modifică starea direct
+                    swapAnimationFinished = false // Modifică starea direct
+
+                } else {
+                    Log.d(TAG, "Attempted swap but no moves left.")
+                    feedbackMessage = "Fără mutări!"
+                    selectedTilePos = null
+                    checkLevelEndCondition() // Apelează funcția helper
+                }
+            } else { // Click neadiacent
+                selectedTilePos = clickedPos
+                feedbackMessage = "Selectat: ($row, $col)"
+            }
+        }
+    }
+
     // suspend fun processMatchesAndCascades() { /* ... codul funcției, actualizează score, inventory, objectiveProgress, board, etc. Apelează checkLevelEndCondition */ }
     suspend fun processMatchesAndCascades() {
 
@@ -771,74 +834,79 @@ fun Match3GameApp() {
     }
 
 
-    // --- Funcție Helper pentru Adiacență ---
-    fun areAdjacent(pos1: TilePosition, pos2: TilePosition): Boolean {
-        val rowDiff = abs(pos1.row - pos2.row)
-        val colDiff = abs(pos1.col - pos2.col)
-        return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1)
-    }
+
 
     //fun swapTiles(pos1: TilePosition, pos2: TilePosition) { /* ... codul funcției, actualizează movesLeft, board, isProcessing, etc. Apelează processMatchesAndCascades sau checkLevelEndCondition */ }
-    fun swapTiles(pos1: TilePosition, pos2: TilePosition) {
-        Log.d(TAG, "Entering swapTiles. isProcessing=$isProcessing, gameState=$gameState, movesLeft=$movesLeft")
-        if (isProcessing || gameState != "Playing") {
-            Log.d(TAG, "Swap ignorat: isProcessing=$isProcessing, gameState=$gameState")
-            return
-        }
 
-        Log.d(TAG, "Attempting swap between $pos1 and $pos2")
+    fun performValidSwapAndProcess(pos1: TilePosition, pos2: TilePosition) {
+        Log.d(TAG, "Performing valid swap logic for $pos1, $pos2")
+        // 1. Actualizează starea reală a tablei
+        val newBoard = board.map { it.toMutableList() }
+        val temp = newBoard[pos1.row][pos1.col]
+        newBoard[pos1.row][pos1.col] = newBoard[pos2.row][pos2.col]
+        newBoard[pos2.row][pos2.col] = temp
+        board = newBoard
 
-        // 1. Creează noua tablă cu piesele inversate
-        val boardAfterSwap = board.map { it.toMutableList() }
-        val temp = boardAfterSwap[pos1.row][pos1.col]
-        boardAfterSwap[pos1.row][pos1.col] = boardAfterSwap[pos2.row][pos2.col]
-        boardAfterSwap[pos2.row][pos2.col] = temp
-
-        // 2. Verifică *potențialele* potriviri DUPĂ swap (fără a modifica starea încă)
-        val potentialMatches = findMatchesOnBoard(boardAfterSwap) // Folosim o funcție ce primește tabla
-
-        if (movesLeft > 0) {
-            movesLeft = movesLeft - 1
-            Log.d(TAG, "Move consumed. Moves left NOW: $movesLeft")
-        } else {
-            Log.d(TAG, "No moves left, swap ignored effectively for game end check")
-            selectedTilePos = null
-            checkLevelEndCondition() // Verifică starea aici
-            return
-        }
-
-
-
-        if (potentialMatches.isNotEmpty()) {
-            // --- Swap valid - pornește procesarea ---
-            Log.d(TAG, "Swap valid, starting processing coroutine")
-            feedbackMessage = "" // Resetează feedback-ul
-            selectedTilePos = null // Deselectează vizual
-            isProcessing = true // Blochează input-ul
-
-            // Actualizează starea pentru a ARĂTA swap-ul
-            board = boardAfterSwap
-
-            // Lansează corutina pentru procesarea cascadei
-            scope.launch {
-                processMatchesAndCascades() // Rulează ciclul complet
-                checkLevelEndCondition() // ---  Verifică finalul nivelului DUPĂ procesare ---
-                isProcessing = false // Deblochează input-ul la sfârșit
-                Log.d(TAG, "Processing finished.")
-            }
-        } else {
-            // --- Swap invalid - nu face nimic vizual pe termen lung ---
-            // (Am putea adăuga o animație scurtă de "shake" aici)
-            Log.d(TAG, "Swap invalid (no matches formed), but move consumed.")
-            feedbackMessage = "Fără potrivire..." // Mesaj mai neutru
-            selectedTilePos = null
-
-            // --- *NOU* Animație de "shake back" (Opțional - implementare ulterioară) ---
-            // Aici ai putea adăuga o mică animație care arată piesele făcând swap și revenind rapid.
-            // --- *NOU* Verifică finalul nivelului DUPĂ mutarea invalidă ---
-            checkLevelEndCondition() // Verifică dacă a fost ultima mutare
+        // 2. Pornește procesarea logică
+        isProcessing = true
+        feedbackMessage = ""
+        scope.launch { // Lansăm procesarea într-o corutină separată
+            processMatchesAndCascades()
+            checkLevelEndCondition()
+            isProcessing = false
+            Log.d(TAG, "Valid swap processing finished.")
         }
     }
+//    fun swapTiles(pos1: TilePosition, pos2: TilePosition) {
+//        Log.d(TAG, "--- SWAP TILES START ---")
+//        Log.d(TAG, "Entering swapTiles. isProcessing=$isProcessing, gameState=$gameState, movesLeft=$movesLeft")
+//        if (isProcessing || gameState != "Playing" || !swapAnimationFinished /* Adăugat recent */) {
+//            Log.d(TAG, "Swap ignorat: processing, wrong state, or prev anim not finished.")
+//            return
+//        }
+//
+//        // Calculează starea ipotetică după swap
+//        val boardAfterSwap = board.map { it.toMutableList() }
+//        val temp = boardAfterSwap[pos1.row][pos1.col]
+//        boardAfterSwap[pos1.row][pos1.col] = boardAfterSwap[pos2.row][pos2.col]
+//        boardAfterSwap[pos2.row][pos2.col] = temp
+//        val potentialMatches = findMatchesOnBoard(boardAfterSwap)
+//
+//        // Consumă o mutare INDIFERENT dacă swap-ul e valid sau nu
+//        if (movesLeft > 0) {
+//            Log.d(TAG, "Attempting to decrement moves. BEFORE: $movesLeft")
+//            movesLeft = movesLeft - 1
+//            Log.d(TAG, "Decrement attempted. AFTER: $movesLeft")
+//        } else {
+//            Log.d(TAG, "No moves left, swap ignored.")
+//            selectedTilePos = null
+//            checkLevelEndCondition() // Verifică dacă lipsa mutărilor încheie jocul
+//            return
+//        }
+//        Log.d(TAG, "Move consumption logic finished. Current movesLeft state: $movesLeft")
+//        // --- *MODIFICAT* Logica pentru swap valid/invalid ---
+//        selectedTilePos = null // Deselectăm oricum
+//        feedbackMessage = ""   // Resetează mesajul inițial
+//
+//        if (potentialMatches.isNotEmpty()) {
+//            // --- Swap VALID (creează potriviri) ---
+//            Log.d(TAG, "Swap VALID. Initiating processing.")
+//            // Setează starea pentru a porni animația de swap în LaunchedEffect
+//            swappingTiles = Pair(pos1, pos2)
+//            swapAnimationFinished = false // Animația începe
+//            // NU actualizăm 'board' aici, o va face LaunchedEffect DUPĂ animație
+//            Log.d(TAG, "--- SWAP TILES END (before LaunchedEffect takes over) ---")
+//        } else {
+//            // --- Swap INVALID (nu creează potriviri) ---
+//            Log.d(TAG, "Swap INVALID. Initiating shake back animation.")
+//            // Setează starea pentru a porni animația de swap (dus-întors) în LaunchedEffect
+//            swappingTiles = Pair(pos1, pos2) // Folosim aceeași stare
+//            swapAnimationFinished = false // Animația începe
+//            // Nu actualizăm 'board' deloc în acest caz
+//        }
+//        // LaunchedEffect(swappingTiles) va prelua controlul animației
+//        // și va decide dacă procesează potriviri sau face animația de retur.
+//    }
 
     // --- Funcție Helper pentru Verificare Gătit ---
     fun canCookRecipe(recipe: Recipe): Boolean {
@@ -959,46 +1027,105 @@ fun Match3GameApp() {
     // LaunchedEffect(swappingTiles) { /* ... codul funcției, animază offset, apelează swapTiles, actualizează swappingTiles, swapAnimationFinished */ }
     // --- Efect pentru a rula animația de SWAP (Varianta Corectată cu Job.join()) ---
     LaunchedEffect(swappingTiles) {
-        val tiles = swappingTiles
-        if (tiles != null) {
-            Log.d(TAG, "LaunchedEffect: Animating swap for $tiles")
-            playSound(context, R.raw.swap)
-            val (pos1, pos2) = tiles
+        val tilesToAnimate = swappingTiles // Perechea curentă care trebuie animată
+        if (tilesToAnimate != null) {
+            Log.d(TAG, "LaunchedEffect: Animating swap for $tilesToAnimate")
+            val (pos1, pos2) = tilesToAnimate
             val xDiff = (pos2.col - pos1.col)
             val yDiff = (pos2.row - pos1.row)
-            // Lansăm animațiile și PĂSTRĂM referințele la Job-uri
+
+            // --- *NOU* Calcul tileSize în Pixeli (aproximativ) ---
+            // Ideal ar fi să obținem lățimea reală a GameBoard, dar folosim o estimare
+            // Să presupunem că tabla ocupă ~90% din lățimea ecranului disponibil
+            // Acest calcul trebuie făcut DUPĂ ce avem context/density
+            var tileSizePx = 0f
+            // TODO: Găsește o metodă mai bună de a obține tileSize în pixeli aici
+            // Poate pasa BoxWithConstraints' maxWidth în sus? Sau folosim o lățime fixă?
+            // Soluție temporară: Calculăm pe baza densității și a Dp-ului aproximativ
+            with(density) {
+                // Presupunem o dimensiune Dp similară cu cea calculată în GameBoard
+                // Acest 40.dp e doar un exemplu, ideal ar fi să fie consistent!
+                // Poate calculăm lățimea ecranului și împărțim?
+                tileSizePx = 45.dp.toPx() // Ajustează 45.dp la o valoare realistă
+            }
+            Log.d(TAG, "Estimated tileSizePx for animation: $tileSizePx")
+
+            // --- Animația Inițială (Dus) ---
             val job1 = scope.launch {
                 tile1Offset.snapTo(IntOffset.Zero)
                 tile1Offset.animateTo(
-                    targetValue = IntOffset(x = xDiff, y = yDiff),
-                    animationSpec = tween(durationMillis = 300) // Poți ajusta durata aici
+                    // Înmulțim diferența de grid cu dimensiunea în pixeli
+                    targetValue = IntOffset(x = (xDiff * tileSizePx).toInt(), y = (yDiff * tileSizePx).toInt()),
+                    animationSpec = tween(durationMillis = 250)
                 )
-                tile1Offset.snapTo(IntOffset.Zero) // Resetăm la finalul animației job-ului
             }
             val job2 = scope.launch {
                 tile2Offset.snapTo(IntOffset.Zero)
                 tile2Offset.animateTo(
-                    targetValue = IntOffset(x = -xDiff, y = -yDiff),
-                    animationSpec = tween(durationMillis = 300) // Poți ajusta durata aici
+                    // Înmulțim diferența de grid cu dimensiunea în pixeli
+                    targetValue = IntOffset(x = (-xDiff * tileSizePx).toInt(), y = (-yDiff * tileSizePx).toInt()),
+                    animationSpec = tween(durationMillis = 250)
                 )
-                tile2Offset.snapTo(IntOffset.Zero) // Resetăm la finalul animației job-ului
             }
 
-            // --- Așteaptă ca AMBELE animații să se termine ---
-            Log.d(TAG, "Waiting for swap animations to join...")
-            job1.join() // Așteaptă finalizarea job1
-            job2.join() // Așteaptă finalizarea job2
-            Log.d(TAG, "Swap animations joined.")
+            // Așteaptă finalul animației "dus"
+            Log.d(TAG, "Waiting for initial swap animation to join...")
+            job1.join()
+            job2.join()
+            Log.d(TAG, "Initial swap animation joined.")
 
-            // --- Continuă DUPĂ ce animațiile s-au terminat ---
-            Log.d(TAG, "Swap animation visually complete. Proceeding with logic.")
-            swapTiles(pos1, pos2) // ACUM apelăm logica reală
-            swappingTiles = null // Resetează starea de swap
-            swapAnimationFinished = true // Marchează finalul animației
-            Log.d(TAG, "Swap logic processing initiated, state reset.")
+            // --- *NOU* Verifică ACUM dacă swap-ul a fost valid ---
+            // Recreăm starea ipotetică a tablei DUPĂ swap
+            val boardCheck = board.map { it.toMutableList() } // Verifică pe starea CURENTĂ
+            val tempCheck = boardCheck[pos1.row][pos1.col]
+            boardCheck[pos1.row][pos1.col] = boardCheck[pos2.row][pos2.col]
+            boardCheck[pos2.row][pos2.col] = tempCheck
+            val potentialMatches = findMatchesOnBoard(boardCheck)
 
-        }
-    }
+            if (potentialMatches.isNotEmpty()) {
+                // --- CAZ: SWAP VALID - Procesează potrivirile ---
+                Log.d(TAG, "Swap valid. Performing logic.")
+                tile1Offset.snapTo(IntOffset.Zero) // Resetează vizual
+                tile2Offset.snapTo(IntOffset.Zero)
+                performValidSwapAndProcess(pos1, pos2)
+
+            } else {
+                // --- CAZ: SWAP INVALID - Animație "Întors" ---
+                Log.d(TAG, "Swap was INVALID. Animating back.")
+                feedbackMessage = "Fără potrivire..." // Setează mesajul ACUM
+                Log.d(TAG, "!!! SWAP INVALID - Initiating SHAKE BACK animation !!!")
+
+                // Animație rapidă înapoi la poziția inițială (offset 0)
+                val jobBack1 = scope.launch {
+                    tile1Offset.animateTo(
+                        targetValue = IntOffset.Zero, // Revine la 0 pixeli offset
+                        animationSpec = tween(durationMillis = 150)
+                    )
+                }
+                val jobBack2 = scope.launch {
+                    tile2Offset.animateTo(
+                        targetValue = IntOffset.Zero,
+                        animationSpec = tween(durationMillis = 150)
+                    )
+                }
+                // Așteaptă finalul animației "întors"
+                Log.d(TAG, "Waiting for shake back animations to join...")
+                jobBack1.join()
+                jobBack2.join()
+                Log.d(TAG, "Shake back animation joined.")
+
+                // Verifică finalul nivelului (poate a fost ultima mutare)
+                checkLevelEndCondition()
+                Log.d(TAG,"Invalid swap post-animation check done.")
+            }
+
+            // --- Resetare finală indiferent de caz ---
+            swappingTiles = null // Gata cu acest swap
+            swapAnimationFinished = true // Permite următorul click/swap
+            Log.d(TAG, "Swap animation state reset.")
+
+        } // Sfârșit if (tilesToAnimate != null)
+    } // Sfârșit LaunchedEffect
 
     // === Decizia de Afișare ===
     if (showRecipeBookScreen) {
@@ -1033,24 +1160,7 @@ fun Match3GameApp() {
             currentLevelId = currentLevelData?.levelId ?: 0, // Pasează ID-ul nivelului
             onShowShop = { showShopDialog = true },
             // Callback-uri
-            onTileClick = { row, col -> // Logica de click e acum aici sau în swapTiles
-                playSound(context, R.raw.click)
-                val clickedPos = TilePosition(row, col)
-                val currentSelection = selectedTilePos
-                if (currentSelection == null) { selectedTilePos = clickedPos }
-                else {
-                    if (clickedPos == currentSelection) { selectedTilePos = null }
-                    else if (areAdjacent(currentSelection, clickedPos)) {
-                        // Inițiază doar animația (logica de swap e în LaunchedEffect)
-                        if (swapAnimationFinished) { // Extra check
-                            swappingTiles = Pair(currentSelection, clickedPos)
-                            selectedTilePos = null
-                            swapAnimationFinished = false
-                            feedbackMessage = "Schimbare..."
-                        }
-                    } else { selectedTilePos = clickedPos }
-                }
-            },
+            onTileClick = ::handleTileClick,
             onShowRecipeBook = {  playSound(context, R.raw.click); showRecipeBookScreen = true }, // Modifică starea de navigare
             onMetaButtonClick = {  playSound(context, R.raw.click) },
             onRetryLevel = ::retryLevel,
@@ -1313,18 +1423,23 @@ fun GameScreen(
         Box(modifier = Modifier.weight(0.8f)) { // Încearcă diferite valori < 1f
             if (gameState == "Playing" || gameState == "Won" || gameState == "Lost") {
                 GameBoard(
+                    onTileClick = { row, col ->
+                        if (gameState == "Playing" && !isProcessing)
+                        onTileClick(row, col)
+                    },
                     board = board,
                     selectedTilePosition = selectedTilePosition,
                     tilesBeingMatched = tilesBeingMatched,
                     swappingTilesInfo = swappingTilesInfo,
                     tile1AnimatedOffset = tile1AnimatedOffset,
                     tile2AnimatedOffset = tile2AnimatedOffset,
-                    onTileClick = { row, col ->
-                        if (gameState == "Playing" && !isProcessing) { // Permite click doar dacă se joacă și nu se procesează
-                            playSound(context, R.raw.click) // Sunet click piesă !!!
-                            onTileClick(row, col)
-                        }
-                    }
+
+//                    onTileClick = { row, col ->
+//                        if (gameState == "Playing" && !isProcessing) { // Permite click doar dacă se joacă și nu se procesează
+//                            playSound(context, R.raw.click) // Sunet click piesă !!!
+//                            onTileClick(row, col)
+//                        }
+//                    }
                 )
             } else { /* Spacer sau mesaj "Joc Terminat" */ }
         }
