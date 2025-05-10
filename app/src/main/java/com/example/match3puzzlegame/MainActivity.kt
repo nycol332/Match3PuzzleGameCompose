@@ -48,6 +48,7 @@ import androidx.compose.foundation.rememberScrollState // Pentru starea scroll-u
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll // Pentru modifier-ul de scroll
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material.icons.filled.Menu // Sau Home
 
 
 
@@ -87,6 +88,13 @@ enum class ObjectiveType {
     COLLECT_INGREDIENTS, // Colectează un număr specific dintr-un ingredient
     COOK_RECIPES,       // Gătește o rețetă specifică de un număr de ori
     // TODO: Adaugă alte tipuri (ex: CLEAR_BLOCKERS - curăță piese speciale)
+}
+enum class ActiveScreen {
+    MENU,
+    GAME,
+    RECIPE_BOOK,
+    UPGRADES,
+    // Poți adăuga MAP, OPTIONS mai târziu
 }
 
 // --- Structura pentru Upgrade-uri ---
@@ -309,11 +317,17 @@ private fun playSound(context: Context, soundResourceId: Int) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "MainActivity: onCreate - START") // LOG NOU
         setContent {
+            Log.d(TAG, "MainActivity: setContent - START") // LOG NOU
             Match3PuzzleGameTheme {
-                Match3GameApp() // Apelăm Composable-ul principal care deține starea
+                Log.d(TAG, "MainActivity: Match3PuzzleGameTheme - START") // LOG NOU
+                Match3GameApp()
+                Log.d(TAG, "MainActivity: Match3PuzzleGameTheme - END") // LOG NOU
             }
+            Log.d(TAG, "MainActivity: setContent - END") // LOG NOU
         }
+        Log.d(TAG, "MainActivity: onCreate - END") // LOG NOU
     }
 }
 
@@ -441,10 +455,11 @@ fun UpgradesScreen(
 // --- Composable Părinte care Deține Starea și Logica ---
 @Composable
 fun Match3GameApp() {
-    // === STAREA JOCULUI  ===
+    var currentActiveScreen by remember { mutableStateOf(ActiveScreen.MENU) } // Începem cu meniul
+    var previousActiveScreen by remember { mutableStateOf(ActiveScreen.MENU) }
+    Log.d(TAG, "Match3GameApp RECOMPOSED: current=$currentActiveScreen, previous=$previousActiveScreen")
     var inventory by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var feedbackMessage by remember { mutableStateOf("") }
-    // Inițializare board folosind funcția DUPĂ ce e definită
     var board by remember { mutableStateOf(emptyList<MutableList<Int>>()) } // Inițial goală
     var selectedTilePos by remember { mutableStateOf<TilePosition?>(null) }
     var tilesBeingMatched by remember { mutableStateOf<Set<TilePosition>>(emptySet()) }
@@ -460,19 +475,15 @@ fun Match3GameApp() {
     var objectiveProgress by remember { mutableStateOf<Map<LevelObjective, Int>>(emptyMap()) }
     var gameState by remember { mutableStateOf("Playing") }
     var selectedRecipeToShow by remember { mutableStateOf<Recipe?>(null) } // Pentru dialog
-    var showRecipeBookScreen by remember { mutableStateOf(false) } // Pentru navigare ecran
     var availableRecipes by remember { mutableStateOf(initialRecipes.toMutableList()) } // Lista rețetelor
     val context = LocalContext.current // Obține contextul aici
     var playerXP by remember { mutableStateOf(0) } // --- Starea pentru Experiență ---
     var playerMoney by remember { mutableStateOf(100) }
     var cookedMealsInventory by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }  // --- Stare pentru Mâncarea Gătită, gata de vânzare ---
-    var showShopDialog by remember { mutableStateOf(false) }
-    var showUpgradesScreen by remember { mutableStateOf(false) }// --- Stare pentru ecranul de upgrade-uri ---
-    val density = LocalDensity.current // *NOU* Obține densitatea ecranului
+    val density = LocalDensity.current // Obține densitatea ecranului
     var currentTileMovements by remember { mutableStateOf<List<TileMovementInfo>>(emptyList()) }
     var playerUpgrades by remember { mutableStateOf<Map<String, Int>>(emptyMap()) } // Starea pentru nivelul upgrade-urilor
-
-
+    var showShopDialog by remember { mutableStateOf(false) }
     // === LOGICA JOCULUI  ===
 
 
@@ -520,6 +531,11 @@ fun Match3GameApp() {
             playSound(context, R.raw.lost) // Sunet de eroare/negare
         }
     }
+
+
+
+
+
     // ---  Funcție pentru Vânzarea Mâncărurilor ---
     fun sellCookedMeals() {
         if (cookedMealsInventory.isEmpty()) {
@@ -554,6 +570,24 @@ fun Match3GameApp() {
         playSound(context, R.raw.coin) // Folosim sunetul de monedă existent? Sau altul?
     }
 
+
+    // În Match3GameApp
+    fun navigateTo(destination: ActiveScreen) { // Eliminăm temporar fromScreen pentru simplitate
+        if (currentActiveScreen != destination) {
+            Log.d(TAG, "navigateTo: DEST=$destination, CURRENT_BEFORE_CHANGE=$currentActiveScreen")
+
+            // SALVĂM ecranul curent (care va deveni anterior)
+            // ÎNAINTE de a schimba currentActiveScreen,
+            // DOAR dacă mergem spre un ecran secundar.
+            if (destination == ActiveScreen.RECIPE_BOOK || destination == ActiveScreen.UPGRADES) {
+                previousActiveScreen = currentActiveScreen // Salvează ecranul de unde plecăm
+                Log.d(TAG, "   SAVED previousActiveScreen = $currentActiveScreen")
+            }
+
+            currentActiveScreen = destination
+            Log.d(TAG, "   NEW currentActiveScreen = $destination. Previous is now: $previousActiveScreen")
+        }
+    }
 
 
     fun findMatchesOnBoard(targetBoard: List<List<Int>>): Set<TilePosition> {
@@ -842,7 +876,7 @@ fun Match3GameApp() {
                 checkLevelEndCondition()
                 break // Ieși din bucla while
             }
-
+            playSound(context, R.raw.potrivire)
             // --- PASUL 1: Procesare Potrivire Curentă (Scor, Inventar, etc.) ---
             cascadeCount++
             Log.d(TAG, "Cascade $cascadeCount: Found ${matches.size} matched tiles.")
@@ -1080,40 +1114,60 @@ fun Match3GameApp() {
 
 
  // --- Resetare la începutul nivelului ---
+    // În @Composable fun Match3GameApp()
+
+    // --- Resetare la începutul nivelului ---
     LaunchedEffect(currentLevelIndex) {
-        val levelData = gameLevels.getOrNull(currentLevelIndex)
+        Log.d(TAG, "--- LaunchedEffect triggered for level index: $currentLevelIndex ---")
+        val levelData = gameLevels.getOrNull(currentLevelIndex) // Obține datele aici
+
         if (levelData != null) {
             Log.d(TAG, "Resetting state for Level ${levelData.levelId}: ${levelData.name}")
 
-            // --- MODIFICAT/NOU: Aplică upgrade-ul "Mutări Extra" ---
-            val extraMovesLevel = playerUpgrades["extra_moves"] ?: 0 // Obține nivelul upgrade-ului
-            val bonusMoves = extraMovesLevel * 1 // Presupunem +1 mutare per nivel de upgrade. Poți schimba '1' la altă valoare.
-            movesLeft = levelData.maxMoves + bonusMoves // Setează mutările totale
-            Log.d(TAG, "movesLeft set to: ${levelData.maxMoves} (base) + $bonusMoves (bonus from Lvl $extraMovesLevel) = $movesLeft")
-            // --- SFÂRȘIT MODIFICARE ---
+            // Aplică upgrade-ul "Mutări Extra"
+            val extraMovesLevel = playerUpgrades["extra_moves"] ?: 0
+            val bonusMoves = extraMovesLevel * 1 // Sau alt factor per nivel de upgrade
+            val totalInitialMoves = levelData.maxMoves + bonusMoves
 
-            // Resetare restul stărilor
+            // Resetează starea pentru noul nivel
             board = generateValidInitialBoard()
+            movesLeft = totalInitialMoves
             objectiveProgress = levelData.objectives.associateWith { 0 }
-            inventory = emptyMap()
-            // score = 0 // Comentat dacă ai decis să-l elimini mai târziu
+            inventory = emptyMap() // Resetează inventarul de ingrediente
+            // score = 0 // Resetează scorul (dacă încă îl folosești)
             gameState = "Playing"
-            feedbackMessage = "Nivel ${levelData.levelId}: ${levelData.name}\nObiectiv principal: [Primul Obiectiv Aici]\nMutări: $movesLeft" // Feedback inițial actualizat
             selectedTilePos = null
             tilesBeingMatched = emptySet()
             isProcessing = false
             swapAnimationFinished = true
             swappingTiles = null
             currentTileMovements = emptyList()
-            // cookedMealsInventory = emptyMap() // Resetezi și mâncarea gătită? Decizie de design.
+            cookedMealsInventory = emptyMap() // Resetează și mâncarea gătită
             // playerXP = 0 // Resetezi XP la fiecare nivel? Sau e global? Momentan e global.
+
+            // --- MODIFICAT/NOU: Construiește feedbackMessage cu obiectivul ---
+            val firstObjectiveDescription = if (levelData.objectives.isNotEmpty()) {
+                // Pentru REACH_SCORE, progresul inițial e 0, scorul inițial e 0 (sau valoarea curentă a 'score' dacă nu se resetează)
+                // Dacă ai eliminat 'score', asigură-te că formatObjective nu mai necesită parametrul 'score'
+                // sau pasează o valoare placeholder cum ar fi 0.
+                formatObjective(levelData.objectives.first(), 0 /*progres inițial*/)
+            } else {
+                "Distrează-te!" // Mesaj dacă nu sunt obiective specifice
+            }
+            feedbackMessage = "Nivel ${levelData.levelId}: ${levelData.name}\n${firstObjectiveDescription}\nMutări: $totalInitialMoves"
+            Log.d(TAG, "Initial feedback: $feedbackMessage")
+            // --- SFÂRȘIT MODIFICARE ---
 
         } else {
             Log.e(TAG, "Invalid level index or game finished: $currentLevelIndex")
-            if (currentLevelIndex >= gameLevels.size) { // Verifică dacă am terminat toate nivelele
+            if (currentLevelIndex >= gameLevels.size && gameLevels.isNotEmpty()) { // Verifică dacă am terminat toate nivelele definite
                 feedbackMessage = "Felicitări! Ai terminat toate nivelele jocului!"
                 gameState = "Finished"
+            } else if (gameLevels.isEmpty()) {
+                feedbackMessage = "Niciun nivel definit în joc!"
+                gameState = "Finished" // Sau altă stare de eroare
             }
+            // Dacă currentLevelIndex e invalid (ex: -1 din retry), nu face nimic, se va corecta
         }
     }
 
@@ -1130,6 +1184,7 @@ fun Match3GameApp() {
             // --- Calcul tileSize în Pixeli (aproximativ) ---
             var tileSizePx = 0f
             // TODO: Găsește o metodă mai bună de a obține tileSize în pixeli aici
+            playSound(context, R.raw.swap)
             with(density) {
                 tileSizePx = 45.dp.toPx() // Ajustează 45.dp la o valoare realistă
             }
@@ -1177,6 +1232,7 @@ fun Match3GameApp() {
                 // --- CAZ: SWAP INVALID - Animație "Întors" ---
                 Log.d(TAG, "Swap was INVALID. Animating back.")
                 feedbackMessage = "Fără potrivire..." // Setează mesajul ACUM
+                playSound(context, R.raw.swap_fail)
                 Log.d(TAG, "!!! SWAP INVALID - Initiating SHAKE BACK animation !!!")
 
                 // Animație rapidă înapoi la poziția inițială (offset 0)
@@ -1211,60 +1267,87 @@ fun Match3GameApp() {
         }
     }
 
-    // === Decizia de Afișare ===
-    if (showRecipeBookScreen) {
-        RecipeBookScreen(
-            recipes = availableRecipes,
-            inventory = inventory, // Pasează starea
-            canCookChecker = ::canCookRecipe,
-            onCookRecipe = ::cookRecipe,
-            onShowRecipeDetails = { recipe -> selectedRecipeToShow = recipe }, // Setează starea pt dialog
-            onClose = { playSound(context, R.raw.click); showRecipeBookScreen = false } // Modifică starea de navigare
-        )
-    } else {
-        GameScreen(
-            // Date de afișat
-            movesLeft = movesLeft,
-            currentLevelData = currentLevelData,
-            objectiveProgress = objectiveProgress,
-            feedbackMessage = feedbackMessage,
-            inventory = inventory,
-            board = board,
-            selectedTilePosition = selectedTilePos,
-            tilesBeingMatched = tilesBeingMatched,
-            isProcessing = isProcessing || !swapAnimationFinished,
-            gameState = gameState,
-            swappingTilesInfo = swappingTiles,
-            tile1AnimatedOffset = tile1Offset.value,
-            tile2AnimatedOffset = tile2Offset.value,
-            playerXP = playerXP,
-            availableRecipesCount = availableRecipes.size,
-            playerMoney = playerMoney,
-            currentLevelId = currentLevelData?.levelId ?: -1,
-            // Callback-uri
-            onTileClick = ::handleTileClick,
-            onShowRecipeBook = { playSound(context, R.raw.click); showRecipeBookScreen = true },
-            onShowShop = { playSound(context, R.raw.click); showShopDialog = true },
-            onShowUpgrades = { playSound(context, R.raw.click); showUpgradesScreen = true },
-            onRetryLevel = ::retryLevel,
-            onNextLevel = ::goToNextLevel,
-            tileMovements = currentTileMovements,
-        )
+    // === DECIZIA DE AFIȘARE A ECRANULUI PRINCIPAL ===
+    when (currentActiveScreen) {
+        ActiveScreen.MENU -> {
+            Log.d(TAG, "Match3GameApp: Displaying MainMenuScreen") // LOG NOU
+
+            MainMenuScreen(
+                onNavigateToGame = { navigateTo(ActiveScreen.GAME) },
+                onNavigateToRecipeBook = { navigateTo(ActiveScreen.RECIPE_BOOK) },
+                onNavigateToShop = { playSound(context, R.raw.click); showShopDialog = true },
+                onNavigateToUpgrades = { navigateTo(ActiveScreen.UPGRADES) }
+            )
+        }
+        ActiveScreen.GAME -> {
+            Log.d(TAG, "Match3GameApp: Displaying GameScreen") // LOG NOU
+
+            GameScreen(
+                // Date de afișat
+                movesLeft = movesLeft,
+                currentLevelData = currentLevelData,
+                objectiveProgress = objectiveProgress,
+                feedbackMessage = feedbackMessage,
+                inventory = inventory,
+                board = board,
+                selectedTilePosition = selectedTilePos,
+                tilesBeingMatched = tilesBeingMatched,
+                isProcessing = isProcessing || !swapAnimationFinished,
+                gameState = gameState,
+                swappingTilesInfo = swappingTiles,
+                tile1AnimatedOffset = tile1Offset.value,
+                tile2AnimatedOffset = tile2Offset.value,
+                playerXP = playerXP,
+                availableRecipesCount = availableRecipes.size,
+                playerMoney = playerMoney,
+                currentLevelId = currentLevelData?.levelId ?: -1,
+                tileMovements = currentTileMovements,
+                // Callback-uri
+                onTileClick = ::handleTileClick,
+                onShowShop = {
+                    playSound(context, R.raw.click)
+                    showShopDialog = true // Corect, setează starea dialogului
+                },
+                onRetryLevel = ::retryLevel,
+                onNextLevel = ::goToNextLevel,
+                onShowRecipeBook = { navigateTo(ActiveScreen.RECIPE_BOOK) },
+                onShowUpgrades = { navigateTo(ActiveScreen.UPGRADES) },
+                onNavigateBackToMenu = { navigateTo(ActiveScreen.MENU) }
+                // TODO: Adaugă un buton "Meniu" în GameScreen care setează currentActiveScreen = ActiveScreen.MENU
+            )
+        }
+        ActiveScreen.RECIPE_BOOK -> {
+            Log.d(TAG, "Match3GameApp: Displaying RecipeBookScreen")
+
+            RecipeBookScreen(
+                recipes = availableRecipes,
+                inventory = inventory,
+                canCookChecker = ::canCookRecipe,
+                onCookRecipe = ::cookRecipe,
+                onShowRecipeDetails = { recipe -> selectedRecipeToShow = recipe },
+                onClose = { // Acesta este apelat de butonul "Înapoi" din RecipeBookScreen
+                    playSound(context, R.raw.click)
+                    Log.d(TAG, "Closing RecipeBook. Will return to: $previousActiveScreen (current is $currentActiveScreen)")
+                    currentActiveScreen = previousActiveScreen
+                }
+            )
+        }
+        ActiveScreen.UPGRADES -> {
+            Log.d(TAG, "Match3GameApp: Displaying UpgradesScreen") // Log util
+            UpgradesScreen(
+                allPossibleUpgrades = availableUpgrades,
+                currentOwnedUpgrades = playerUpgrades,
+                currentPlayerMoney = playerMoney,
+                onPurchaseUpgrade = ::purchaseUpgrade,
+                onClose = {
+                    playSound(context, R.raw.click)
+                    Log.d(TAG, "Closing Upgrades. Will return to: $previousActiveScreen (current is $currentActiveScreen)")
+                    currentActiveScreen = previousActiveScreen
+                }
+            )
+        }
     }
 
-    // === Decizia de Afișare ===
-    if (showUpgradesScreen) {
-        UpgradesScreen(
-            allPossibleUpgrades = availableUpgrades,
-            currentOwnedUpgrades = playerUpgrades,
-            currentPlayerMoney = playerMoney,
-            onPurchaseUpgrade = ::purchaseUpgrade, // Pasează referința la funcția ta
-            onClose = {
-                playSound(context, R.raw.click)
-                showUpgradesScreen = false
-            }
-        )
-    }
 
     // --- Afișează dialogul PESTE orice ecran ---
     if (selectedRecipeToShow != null) {
@@ -1272,31 +1355,34 @@ fun Match3GameApp() {
             recipe = selectedRecipeToShow!!,
             inventory = inventory,
             canCookChecker = ::canCookRecipe,
-            onCook = ::cookRecipe, // Folosește funcția de gătit definită aici
-            onDismiss = { playSound(context, R.raw.click); selectedRecipeToShow = null } // Închide dialogul
+            onCook = { recipeToCook -> // Asigură-te că onCook din dialog gestionează corect
+                cookRecipe(recipeToCook)
+                selectedRecipeToShow = null // Închide dialogul după gătit
+            },
+            onDismiss = {
+                playSound(context, R.raw.click)
+                selectedRecipeToShow = null
+            }
         )
     }
+
 
     // --- Afișare Dialog Shop ---
     if (showShopDialog) {
         ShopDialog(
             cookedMeals = cookedMealsInventory,
-            recipesData = allPossibleRecipes, // Pasează lista completă pentru prețuri/nume
+            recipesData = allPossibleRecipes,
             onSellAll = {
-                sellCookedMeals() // Apelează logica de vânzare
+                sellCookedMeals()
                 showShopDialog = false // Închide dialogul după vânzare
             },
-            onDismiss = { showShopDialog = false } // Închide dialogul la dismiss
+            onDismiss = {
+                playSound(context, R.raw.click)
+                showShopDialog = false
+            }
         )
     }
-
-
-
-
     // --- Funcție pentru Cumpărarea/Îmbunătățirea unui Upgrade ---
-
-
-
 }
 
 
@@ -1328,8 +1414,11 @@ fun GameScreen(
     currentLevelId: Int, //  Primește ID-ul nivelului curent
     onShowShop: () -> Unit, // Callback pentru shop
     onShowUpgrades: () -> Unit,
-    tileMovements: List<TileMovementInfo>
+    tileMovements: List<TileMovementInfo>,
+    onNavigateBackToMenu: () -> Unit
 ) {
+    Log.d(TAG, "GameScreen: Composing - Level: ${currentLevelData?.levelId}, GameState: $gameState") // LOG NOU
+
     val context = LocalContext.current // Obține context
 
     Column(
@@ -1354,12 +1443,20 @@ fun GameScreen(
             }) { Text("Reîncearcă Nivelul") }
         }
 
-        // --- Rând Superior: Scor, XP, Rețete ---
+        // --- Rând Superior:  XP, Rețete ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // --- Buton Meniu/Înapoi ---
+            IconButton(onClick = onNavigateBackToMenu) {
+                Icon(
+                    imageVector = Icons.Filled.Menu, // Sau Home, sau altă iconiță
+                    contentDescription = "Meniu Principal",
+                    tint = MaterialTheme.colorScheme.onSurface // Sau altă culoare
+                )
+            }
             // Grup XP
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("XP:", fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -1986,3 +2083,77 @@ fun DefaultPreview() {
     }
 }
 
+// --- MODIFICAT/NOU: Ecranul Meniu Principal ---
+@Composable
+fun MainMenuScreen(
+    onNavigateToGame: () -> Unit,
+    onNavigateToRecipeBook: () -> Unit,
+    onNavigateToUpgrades: () -> Unit,
+    onNavigateToShop: () -> Unit,
+    // onNavigateToMap: () -> Unit, // Pentru viitor
+    // onNavigateToOptions: () -> Unit, // Pentru viitor
+    // onExitGame: () -> Unit // Pentru viitor
+) {
+    Log.d(TAG, "MainMenuScreen: Composing") // LOG NOU
+
+    val context = LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .systemBarsPadding()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "Cronicile Culinare",
+            style = MaterialTheme.typography.headlineLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            "Bucătăria Călătoare",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 32.dp)
+        )
+
+        Button(
+            onClick = { playSound(context, R.raw.click); onNavigateToGame() },
+            modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp)
+        ) {
+            Text("Joacă") // Sau "Continuă"
+        }
+
+        Button(
+            onClick = { playSound(context, R.raw.click); onNavigateToRecipeBook() },
+            modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp)
+        ) {
+            Text("Carte de Bucate")
+        }
+
+        Button(
+            onClick = { playSound(context, R.raw.click); onNavigateToUpgrades() },
+            modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp)
+        ) {
+            Text("Atelier Îmbunătățiri")
+        }
+
+        Button(
+            onClick = { playSound(context, R.raw.click); onNavigateToShop() },
+            modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp)
+        ) {
+            Text("Piață (Vinde)")
+        }
+
+        // Butoane Placeholder pentru viitor
+        /*
+        Button(onClick = { /* onNavigateToMap() */ }, modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp), enabled = false) {
+            Text("Harta Lumii (În Curând)")
+        }
+        Button(onClick = { /* onNavigateToOptions() */ }, modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp), enabled = false) {
+            Text("Opțiuni (În Curând)")
+        }
+        */
+        // Poți adăuga și un buton de ieșire dacă dorești, deși pe Android nu e mereu necesar
+    }
+}
