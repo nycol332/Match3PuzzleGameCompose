@@ -14,9 +14,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.Icon // Pentru iconiță back 
-import androidx.compose.material3.IconButton // Pentru iconiță back 
-import androidx.compose.material3.Divider // Separator vizual 
+import androidx.compose.material3.Icon // Pentru iconiță back
+import androidx.compose.material3.IconButton // Pentru iconiță back
+import androidx.compose.material3.Divider // Separator vizual
 import androidx.compose.material3.* // Import Material 3
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,10 +49,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll // Pentru modifier-ul de scroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.filled.Menu // Sau Home
-
-
-
-
 
 
 //Constante si Data classes
@@ -89,12 +85,14 @@ enum class ObjectiveType {
     COOK_RECIPES,       // Gătește o rețetă specifică de un număr de ori
     // TODO: Adaugă alte tipuri (ex: CLEAR_BLOCKERS - curăță piese speciale)
 }
+// MODIFICAT: Adăugat WORLD_MAP
 enum class ActiveScreen {
     MENU,
     GAME,
     RECIPE_BOOK,
     UPGRADES,
-    // Poți adăuga MAP, OPTIONS mai târziu
+    WORLD_MAP // NOU: Ecran pentru harta lumii/nivelelor
+    // Poți adăuga OPTIONS mai târziu
 }
 
 // --- Structura pentru Upgrade-uri ---
@@ -145,7 +143,7 @@ val tileColors: Map<Int, Color> = mapOf(
 )
 
 val tileDrawables: Map<Int, Int> = mapOf(
-    TILE_TYPE_1 to R.drawable.castravete, // Înlocuiește cu numele reale ale fișierelor tale!
+    TILE_TYPE_1 to R.drawable.castravete,
     TILE_TYPE_2 to R.drawable.rosie,
     TILE_TYPE_3 to R.drawable.ceapa,
     TILE_TYPE_4 to R.drawable.porumb,
@@ -164,16 +162,15 @@ val availableUpgrades = listOf(
         name = "Mutări Bonus",
         description = { level -> "Începi fiecare nivel cu +$level mutări." },
         maxLevel = 5,
-        cost = { level -> 100 * (level + 1) * (level + 1) } // Exemplu: 100, 400, 900, 1600, 2500 Bani
+        cost = { level -> 100 * (level + 1) * (level + 1) }
     ),
     UpgradeInfo(
         id = "rare_ingredient_luck",
         name = "Noroc la Ingrediente",
-        description = { level -> "Șansă +${5 * level}% să apară ingrediente mai rare." }, // Efectul va fi implementat mai târziu
+        description = { level -> "Șansă +${5 * level}% să apară ingrediente mai rare." },
         maxLevel = 4,
-        cost = { level -> 500 * (level + 1) } // Exemplu: 500, 1000, 1500, 2000 Bani
+        cost = { level -> 500 * (level + 1) }
     )
-    // TODO: Adaugă upgrade-uri cosmetice, de combustibil, etc.
 )
 
 
@@ -182,44 +179,41 @@ val availableUpgrades = listOf(
 val gameLevels = listOf(
     LevelData(
         levelId = 1,
-        name = "Piața Locală - Începuturi",
+        name = "Poiana Verde - Începuturi", // MODIFICAT Nume
         objectives = listOf(
-            LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_2, 15) // Colectează 15 Roșii
+            LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_2, 15)
         ),
         maxMoves = 20,
         unlocksRecipeIds = listOf(2)
     ),
     LevelData(
         levelId = 2,
-        name = "Prima Comandă - Salata",
+        name = "Satul Vesel - Prima Comandă", // MODIFICAT Nume
         objectives = listOf(
-            LevelObjective(ObjectiveType.COOK_RECIPES, 1, 1) // Gătește Salata Proaspătă (ID 1) o dată
+            LevelObjective(ObjectiveType.COOK_RECIPES, 1, 1)
         ),
         maxMoves = 25,
         unlocksRecipeIds = listOf(3)
     ),
     LevelData(
         levelId = 3,
-        name = "Provizia de Iarnă",
+        name = "Pădurea Umbroasă - Provizii", // MODIFICAT Nume
         objectives = listOf(
-            LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_5, 20), // 20 Cartofi
+            LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_5, 20),
         ),
         maxMoves = 30,
         unlocksRecipeIds = listOf(4)
     ),
     LevelData(
         levelId = 4,
-        name = "Festivalul Recoltei",
+        name = "Târgul de la Răscruce - Festival", // MODIFICAT Nume
         objectives = listOf(
-            LevelObjective(ObjectiveType.COOK_RECIPES, 2, 2), // Gătește Garnitura de Porumb de 2 ori
-            LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_4, 30) // 30 Porumb
+            LevelObjective(ObjectiveType.COOK_RECIPES, 2, 2),
+            LevelObjective(ObjectiveType.COLLECT_INGREDIENTS, TILE_TYPE_4, 30)
         ),
         maxMoves = 35,
-        unlocksRecipeIds = listOf(5) // Deblochează Supa Cremă (4)
+        unlocksRecipeIds = listOf(5)
     )
-
-
-    // Adaugă mai multe nivele
 )
 
 val allPossibleRecipes = listOf(
@@ -227,107 +221,92 @@ val allPossibleRecipes = listOf(
         id = 1,
         name = "Salată Proaspătă",
         description = "Perfectă pentru o zi de vară.",
-        ingredientsNeeded = mapOf(TILE_TYPE_1 to 5, TILE_TYPE_2 to 3, TILE_TYPE_3 to 2), // 5 Castraveți, 3 Roșii, 2 Cepe
+        ingredientsNeeded = mapOf(TILE_TYPE_1 to 5, TILE_TYPE_2 to 3, TILE_TYPE_3 to 2),
         sellingPrice = 30
     ),
     Recipe(
         id = 2,
         name = "Garnitură de Porumb",
         description = "Simplu și gustos.",
-        ingredientsNeeded = mapOf(TILE_TYPE_4 to 8, TILE_TYPE_1 to 2), // 8 Porumb, 2 Castraveți
+        ingredientsNeeded = mapOf(TILE_TYPE_4 to 8, TILE_TYPE_1 to 2),
         sellingPrice = 45
     ),
     Recipe(
         id = 3,
         name = "Tocăniță de Legume",
         description = "Sățioasă și aromată.",
-        ingredientsNeeded = mapOf(TILE_TYPE_5 to 6, TILE_TYPE_2 to 4, TILE_TYPE_3 to 3), // 6 Cartofi, 4 Roșii, 3 Cepe
+        ingredientsNeeded = mapOf(TILE_TYPE_5 to 6, TILE_TYPE_2 to 4, TILE_TYPE_3 to 3),
         sellingPrice = 70
-        ),
-    // --- Adaugă mai multe rețete aici ---
+    ),
     Recipe(
         id = 4,
         name = "Supă Cremă de Roșii",
         description = "Clasică și reconfortantă.",
-        ingredientsNeeded = mapOf(TILE_TYPE_2 to 10, TILE_TYPE_3 to 4), // 10 Roșii, 4 Cepe
+        ingredientsNeeded = mapOf(TILE_TYPE_2 to 10, TILE_TYPE_3 to 4),
         sellingPrice = 55
-        ),
+    ),
     Recipe(
         id = 5,
         name = "Cartofi la Cuptor",
         description = "Cu ierburi aromatice.",
-        ingredientsNeeded = mapOf(TILE_TYPE_5 to 12, TILE_TYPE_3 to 2), // 12 Cartofi, 2 Cepe
+        ingredientsNeeded = mapOf(TILE_TYPE_5 to 12, TILE_TYPE_3 to 2),
         sellingPrice = 60
-        )
+    )
 )
 val initialRecipes = allPossibleRecipes.filter { it.id == 1 }
-
-
-
 
 
 //Funcții globale pure
 
 fun getIngredientName(tileType: Int): String {
     return when (tileType) {
-        TILE_TYPE_1 -> "Cucumber" // Exemplu
-        TILE_TYPE_2 -> "Tomato" // Exemplu
-        TILE_TYPE_3 -> "Onion" // Exemplu
-        TILE_TYPE_4 -> "Corn" // Exemplu
-        TILE_TYPE_5 -> "Potato" // Exemplu
+        TILE_TYPE_1 -> "Castravete" // MODIFICAT
+        TILE_TYPE_2 -> "Roșie"     // MODIFICAT
+        TILE_TYPE_3 -> "Ceapă"      // MODIFICAT
+        TILE_TYPE_4 -> "Porumb"     // MODIFICAT
+        TILE_TYPE_5 -> "Cartof"     // MODIFICAT
         else -> "Necunoscut"
     }
 }
 
-// --- Funcție Helper pentru Redare Sunet ---
 private fun playSound(context: Context, soundResourceId: Int) {
-    // Folosește try-catch pentru a evita crash-uri dacă resursa nu e găsită sau apare altă eroare
     try {
-        // Creează un MediaPlayer nou PENTRU FIECARE redare a unui sunet scurt.
-        // Nu refolosi același obiect MediaPlayer pentru sunete scurte rapide,
-        // poate cauza probleme de suprapunere sau întârzieri.
         val mp = MediaPlayer.create(context, soundResourceId)
         if (mp == null) {
             Log.e(TAG, "playSound: MediaPlayer.create returned null for resource ID: $soundResourceId")
             return
         }
         mp.setOnCompletionListener { mediaPlayer ->
-            // Eliberează resursele MediaPlayer DUPĂ ce sunetul s-a terminat
             mediaPlayer?.release()
             Log.d(TAG, "playSound: MediaPlayer released for resource ID: $soundResourceId")
         }
         mp.setOnErrorListener { _, what, extra ->
             Log.e(TAG, "playSound: MediaPlayer error! what: $what, extra: $extra for resource ID: $soundResourceId")
-            // Încearcă să eliberezi resursele și în caz de eroare
             mp?.release()
-            true // Indică faptul că am gestionat eroarea
+            true
         }
-        mp.start() // Pornește redarea
+        mp.start()
     } catch (e: Exception) {
         Log.e(TAG, "playSound: Exception while trying to play sound ID: $soundResourceId", e)
     }
 }
 
 
-
-
-
-
 // --- MainActivity  ---
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d(TAG, "MainActivity: onCreate - START") // LOG NOU
+        Log.d(TAG, "MainActivity: onCreate - START")
         setContent {
-            Log.d(TAG, "MainActivity: setContent - START") // LOG NOU
+            Log.d(TAG, "MainActivity: setContent - START")
             Match3PuzzleGameTheme {
-                Log.d(TAG, "MainActivity: Match3PuzzleGameTheme - START") // LOG NOU
+                Log.d(TAG, "MainActivity: Match3PuzzleGameTheme - START")
                 Match3GameApp()
-                Log.d(TAG, "MainActivity: Match3PuzzleGameTheme - END") // LOG NOU
+                Log.d(TAG, "MainActivity: Match3PuzzleGameTheme - END")
             }
-            Log.d(TAG, "MainActivity: setContent - END") // LOG NOU
+            Log.d(TAG, "MainActivity: setContent - END")
         }
-        Log.d(TAG, "MainActivity: onCreate - END") // LOG NOU
+        Log.d(TAG, "MainActivity: onCreate - END")
     }
 }
 
@@ -335,14 +314,14 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpgradesScreen(
-    allPossibleUpgrades: List<UpgradeInfo>, // Lista tuturor upgrade-urilor definite global
-    currentOwnedUpgrades: Map<String, Int>, // Map<UpgradeId, CurrentLevel> de la player
-    currentPlayerMoney: Int, // Banii actuali ai jucătorului
-    onPurchaseUpgrade: (upgradeId: String) -> Unit, // Callback la cumpărare
-    onClose: () -> Unit // Callback pentru a închide ecranul
+    allPossibleUpgrades: List<UpgradeInfo>,
+    currentOwnedUpgrades: Map<String, Int>,
+    currentPlayerMoney: Int,
+    onPurchaseUpgrade: (upgradeId: String) -> Unit,
+    onClose: () -> Unit
 ) {
-    val context = LocalContext.current // Pentru sunete
-    Scaffold( // Folosim Scaffold pentru un TopAppBar și o structură mai bună
+    val context = LocalContext.current
+    Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Atelier Îmbunătățiri") },
@@ -351,10 +330,10 @@ fun UpgradesScreen(
                         playSound(context, R.raw.click)
                         onClose()
                     }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Înapoi la Joc")
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Înapoi")
                     }
                 },
-                actions = { // Acțiuni în dreapta (ex: afișare bani)
+                actions = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(end = 12.dp)
@@ -374,13 +353,13 @@ fun UpgradesScreen(
                 }
             )
         }
-    ) { innerPadding -> // Padding-ul oferit de Scaffold pentru conținut
+    ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding) // Aplică padding-ul de la Scaffold
-                .padding(horizontal = 16.dp, vertical = 8.dp), // Padding suplimentar pentru conținut
-            verticalArrangement = Arrangement.spacedBy(10.dp) // Spațiu între carduri
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (allPossibleUpgrades.isEmpty()){
                 item {
@@ -438,7 +417,6 @@ fun UpgradesScreen(
                                 enabled = canAfford,
                                 modifier = Modifier.align(Alignment.End),
                                 colors = ButtonDefaults.buttonColors(
-                                    // Culori diferite dacă nu își permite
                                     containerColor = if (canAfford) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                     contentColor = if (canAfford) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -449,18 +427,19 @@ fun UpgradesScreen(
                     }
                 }
             }
-        } // Sfârșit LazyColumn
-    } // Sfârșit Scaffold
+        }
+    }
 }
+
 // --- Composable Părinte care Deține Starea și Logica ---
 @Composable
 fun Match3GameApp() {
-    var currentActiveScreen by remember { mutableStateOf(ActiveScreen.MENU) } // Începem cu meniul
+    var currentActiveScreen by remember { mutableStateOf(ActiveScreen.MENU) }
     var previousActiveScreen by remember { mutableStateOf(ActiveScreen.MENU) }
     Log.d(TAG, "Match3GameApp RECOMPOSED: current=$currentActiveScreen, previous=$previousActiveScreen")
     var inventory by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
     var feedbackMessage by remember { mutableStateOf("") }
-    var board by remember { mutableStateOf(emptyList<MutableList<Int>>()) } // Inițial goală
+    var board by remember { mutableStateOf(emptyList<MutableList<Int>>()) }
     var selectedTilePos by remember { mutableStateOf<TilePosition?>(null) }
     var tilesBeingMatched by remember { mutableStateOf<Set<TilePosition>>(emptySet()) }
     var isProcessing by remember { mutableStateOf(false) }
@@ -471,118 +450,85 @@ fun Match3GameApp() {
     var swapAnimationFinished by remember { mutableStateOf(true) }
     var currentLevelIndex by remember { mutableStateOf(0) }
     val currentLevelData = remember(currentLevelIndex) { gameLevels.getOrNull(currentLevelIndex) }
-    var movesLeft by remember { mutableStateOf(0) } // Va fi setat în LaunchedEffect
+    var movesLeft by remember { mutableStateOf(0) }
     var objectiveProgress by remember { mutableStateOf<Map<LevelObjective, Int>>(emptyMap()) }
     var gameState by remember { mutableStateOf("Playing") }
-    var selectedRecipeToShow by remember { mutableStateOf<Recipe?>(null) } // Pentru dialog
-    var availableRecipes by remember { mutableStateOf(initialRecipes.toMutableList()) } // Lista rețetelor
-    val context = LocalContext.current // Obține contextul aici
-    var playerXP by remember { mutableStateOf(0) } // --- Starea pentru Experiență ---
+    var selectedRecipeToShow by remember { mutableStateOf<Recipe?>(null) }
+    var availableRecipes by remember { mutableStateOf(initialRecipes.toMutableList()) }
+    val context = LocalContext.current
+    var playerXP by remember { mutableStateOf(0) }
     var playerMoney by remember { mutableStateOf(100) }
-    var cookedMealsInventory by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }  // --- Stare pentru Mâncarea Gătită, gata de vânzare ---
-    val density = LocalDensity.current // Obține densitatea ecranului
+    var cookedMealsInventory by remember { mutableStateOf<Map<Int, Int>>(emptyMap()) }
+    val density = LocalDensity.current
     var currentTileMovements by remember { mutableStateOf<List<TileMovementInfo>>(emptyList()) }
-    var playerUpgrades by remember { mutableStateOf<Map<String, Int>>(emptyMap()) } // Starea pentru nivelul upgrade-urilor
+    var playerUpgrades by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var showShopDialog by remember { mutableStateOf(false) }
-    // === LOGICA JOCULUI  ===
+    // NOU: Stare pentru a ține minte până la ce nivel a ajuns jucătorul
+    var maxUnlockedLevelIndex by remember { mutableStateOf(0) } // Primul nivel (index 0) e mereu deblocat
 
 
-    // --- Funcția pentru Cumpărarea/Îmbunătățirea unui Upgrade ---
     fun purchaseUpgrade(upgradeId: String) {
         val upgradeInfo = availableUpgrades.find { it.id == upgradeId }
         if (upgradeInfo == null) {
-            Log.e(TAG, "Attempted to purchase unknown upgrade ID: $upgradeId")
             feedbackMessage = "Eroare: Îmbunătățire necunoscută!"
-            playSound(context, R.raw.lost) // Sunet de eroare/negare
+            playSound(context, R.raw.lost)
             return
         }
-
-        val currentLevel = playerUpgrades[upgradeId] ?: 0 // Nivelul actual (0 dacă nu e deținut)
-
+        val currentLevel = playerUpgrades[upgradeId] ?: 0
         if (currentLevel >= upgradeInfo.maxLevel) {
-            Log.d(TAG, "Upgrade ${upgradeInfo.name} is already at max level.")
             feedbackMessage = "${upgradeInfo.name} este deja la Nivel Maxim!"
-            // playSound(context, R.raw.click) // Poate un sunet neutru
             return
         }
-
-        val costForNextLevel = upgradeInfo.cost(currentLevel) // Costul pentru a trece la nivelul currentLevel + 1
-
+        val costForNextLevel = upgradeInfo.cost(currentLevel)
         if (playerMoney >= costForNextLevel) {
-            // Jucătorul își permite
-            playerMoney -= costForNextLevel // Scade banii
+            playerMoney -= costForNextLevel
             val newLevel = currentLevel + 1
-            // Actualizează starea playerUpgrades
-            // Important: creăm un map NOU pentru a declanșa recompoziția corect
             playerUpgrades = playerUpgrades + (upgradeId to newLevel)
-
-            Log.i(TAG, "Purchased/Upgraded ${upgradeInfo.name} to level $newLevel for $costForNextLevel money. Money left: $playerMoney")
-            feedbackMessage = "${upgradeInfo.name} a ajuns la Nivelul $newLevel!" // Mesaj de succes
-            playSound(context, R.raw.coin) // Sunet de "cumpărare" / succes
-
-            // Logica specifică efectului (dacă e cazul să se aplice imediat)
-            // Pentru "Mutări Extra", efectul se va aplica la următorul start de nivel.
-            Log.d(TAG, "Upgrade '${upgradeInfo.name}' purchased. Effect will apply as needed.")
-
+            feedbackMessage = "${upgradeInfo.name} a ajuns la Nivelul $newLevel!"
+            playSound(context, R.raw.coin)
         } else {
-            // Nu își permite
-            Log.d(TAG, "Cannot afford upgrade ${upgradeInfo.name}. Needed: $costForNextLevel, Has: $playerMoney")
             feedbackMessage = "Nu ai ${costForNextLevel} Bani pentru ${upgradeInfo.name}!"
-            playSound(context, R.raw.lost) // Sunet de eroare/negare
+            playSound(context, R.raw.lost)
         }
     }
 
-
-
-
-
-    // ---  Funcție pentru Vânzarea Mâncărurilor ---
     fun sellCookedMeals() {
         if (cookedMealsInventory.isEmpty()) {
-            Log.d(TAG, "Sell attempt but cooked inventory is empty.")
             feedbackMessage = "Nu ai ce vinde!"
             return
         }
-
         var moneyEarned = 0
         cookedMealsInventory.forEach { (recipeId, quantity) ->
-            // Găsește prețul rețetei
-            val recipe = allPossibleRecipes.find { it.id == recipeId } // Folosim lista globală
+            val recipe = allPossibleRecipes.find { it.id == recipeId }
             if (recipe != null) {
                 moneyEarned += recipe.sellingPrice * quantity
-            } else {
-                Log.w(TAG, "Could not find recipe data for ID $recipeId during selling.")
             }
         }
-
-        Log.d(TAG, "Selling all cooked meals. Earned: $moneyEarned Money.")
-
-        // Actualizează banii jucătorului
         playerMoney += moneyEarned
-
-        // Golește inventarul de mâncare gătită
         cookedMealsInventory = emptyMap()
-
-        // Oferă feedback
         feedbackMessage = "Ai vândut marfa pentru $moneyEarned Bani!"
-
-        // TODO: Redă un sunet de "casa de marcat" sau similar
-        playSound(context, R.raw.coin) // Folosim sunetul de monedă existent? Sau altul?
+        playSound(context, R.raw.coin)
     }
 
-
-    // În Match3GameApp
-    fun navigateTo(destination: ActiveScreen) { // Eliminăm temporar fromScreen pentru simplitate
+    // MODIFICAT: Funcția navigateTo pentru a gestiona mai bine `previousActiveScreen`
+    fun navigateTo(destination: ActiveScreen) {
         if (currentActiveScreen != destination) {
             Log.d(TAG, "navigateTo: DEST=$destination, CURRENT_BEFORE_CHANGE=$currentActiveScreen")
 
-            // SALVĂM ecranul curent (care va deveni anterior)
-            // ÎNAINTE de a schimba currentActiveScreen,
-            // DOAR dacă mergem spre un ecran secundar.
-            if (destination == ActiveScreen.RECIPE_BOOK || destination == ActiveScreen.UPGRADES) {
-                previousActiveScreen = currentActiveScreen // Salvează ecranul de unde plecăm
-                Log.d(TAG, "   SAVED previousActiveScreen = $currentActiveScreen")
+            // Salvează ecranul curent (care va deveni anterior)
+            // DOAR dacă NU ne întoarcem la MENIU sau la HARTA (care sunt ecrane "principale")
+            // și NU mergem SPRE MENIU sau HARTA (pentru a nu suprascrie un 'previous' valid)
+            if (destination !in listOf(ActiveScreen.MENU, ActiveScreen.WORLD_MAP) &&
+                currentActiveScreen !in listOf(ActiveScreen.MENU, ActiveScreen.WORLD_MAP)) {
+                previousActiveScreen = currentActiveScreen
+                Log.d(TAG, "   SAVED previousActiveScreen = $currentActiveScreen because navigating to a sub-screen ($destination) from a sub-screen ($currentActiveScreen)")
+            } else if (destination in listOf(ActiveScreen.RECIPE_BOOK, ActiveScreen.UPGRADES, ActiveScreen.GAME) &&
+                currentActiveScreen in listOf(ActiveScreen.MENU, ActiveScreen.WORLD_MAP)) {
+                // Dacă plecăm de la MENIU sau HARTA spre un ecran secundar (REȚETE, UPGRADES, JOC)
+                previousActiveScreen = currentActiveScreen
+                Log.d(TAG, "   SAVED previousActiveScreen = $currentActiveScreen because navigating from a main screen ($currentActiveScreen) to a sub-screen ($destination)")
             }
+
 
             currentActiveScreen = destination
             Log.d(TAG, "   NEW currentActiveScreen = $destination. Previous is now: $previousActiveScreen")
@@ -594,547 +540,365 @@ fun Match3GameApp() {
         val matches = mutableSetOf<TilePosition>()
         for (r in 0 until ROWS) {
             var currentStreak = 1
-            var currentType = -1 // Tip invalid inițial
+            var currentType = -1
             for (c in 0 until COLS) {
-                val tileType =
-                    targetBoard.getOrNull(r)?.getOrNull(c) ?: EMPTY_TILE // Folosește targetBoard
+                val tileType = targetBoard.getOrNull(r)?.getOrNull(c) ?: EMPTY_TILE
                 if (tileType != EMPTY_TILE && tileType == currentType) {
                     currentStreak++
                 } else {
                     if (currentStreak >= 3) {
-                        for (i in 1..currentStreak) {
-                            matches.add(TilePosition(r, c - i))
-                        }
+                        for (i in 1..currentStreak) { matches.add(TilePosition(r, c - i)) }
                     }
                     currentType = tileType
                     currentStreak = if (tileType != EMPTY_TILE) 1 else 0
                 }
             }
             if (currentStreak >= 3) {
-                for (i in 1..currentStreak) {
-                    matches.add(TilePosition(r, COLS - i))
-                }
+                for (i in 1..currentStreak) { matches.add(TilePosition(r, COLS - i)) }
             }
         }
-        // Verificare Verticală
         for (c in 0 until COLS) {
             var currentStreak = 1
             var currentType = -1
             for (r in 0 until ROWS) {
-                val tileType =
-                    targetBoard.getOrNull(r)?.getOrNull(c) ?: EMPTY_TILE // Folosește targetBoard
+                val tileType = targetBoard.getOrNull(r)?.getOrNull(c) ?: EMPTY_TILE
                 if (tileType != EMPTY_TILE && tileType == currentType) {
                     currentStreak++
                 } else {
                     if (currentStreak >= 3) {
-                        for (i in 1..currentStreak) {
-                            matches.add(TilePosition(r - i, c))
-                        }
+                        for (i in 1..currentStreak) { matches.add(TilePosition(r - i, c)) }
                     }
                     currentType = tileType
                     currentStreak = if (tileType != EMPTY_TILE) 1 else 0
                 }
             }
             if (currentStreak >= 3) {
-                for (i in 1..currentStreak) {
-                    matches.add(TilePosition(ROWS - i, c))
-                }
+                for (i in 1..currentStreak) { matches.add(TilePosition(ROWS - i, c)) }
             }
         }
         return matches
     }
 
-
     fun generateValidInitialBoard(): List<MutableList<Int>> {
         var attempts = 0
-        while (attempts < 100) { // Adăugăm o limită de siguranță pentru a evita bucle infinite
-            Log.d(TAG, "Generating initial board attempt: ${attempts + 1}")
-            // 1. Generează o tablă candidată
-            val candidateBoard = List(ROWS) {
-                MutableList(COLS) { TILE_TYPES.random() }
-            }
-
-            // 2. Verifică potrivirile pe tabla candidată
+        while (attempts < 100) {
+            val candidateBoard = List(ROWS) { MutableList(COLS) { TILE_TYPES.random() } }
             val initialMatches = findMatchesOnBoard(candidateBoard)
-
-            // 3. Dacă nu sunt potriviri, returnează tabla validă
             if (initialMatches.isEmpty()) {
-                Log.d(TAG, "Valid initial board found after ${attempts + 1} attempts.")
-                return candidateBoard // Am găsit o tablă bună!
+                return candidateBoard
             }
-
-            // 4. Dacă există potriviri, bucla continuă și generăm alta
             attempts++
-            Log.d(TAG, "Initial board had matches, retrying...")
         }
-        // Fallback: Dacă nu găsim o tablă validă după multe încercări,
-        // returnăm ultima generată (cu potriviri) pentru a evita blocarea.
-        Log.w(
-            TAG,
-            "Could not generate a match-free initial board after 100 attempts. Using last generated board."
-        )
-        // Să returnăm totuși o tablă goală în acest caz extrem pentru a fi clar
-        return List(ROWS) { MutableList(COLS) { EMPTY_TILE } } // Sau returnează ultima `candidateBoard`
+        Log.w(TAG, "Could not generate a match-free initial board. Using last generated board (may have matches).")
+        return List(ROWS) { MutableList(COLS) { TILE_TYPES.random() } } // Fallback
     }
 
-
-    // Inițializarea reală a tablei DUPĂ definirea funcțiilor necesare
-    LaunchedEffect(Unit) { // Rulează o singură dată la început
+    LaunchedEffect(Unit) {
         board = generateValidInitialBoard()
     }
 
-
+    // MODIFICAT: Adăugat parametru `maxUnlockedLevelIndex` și logica de actualizare
     fun checkLevelEndCondition(progressToCheck: Map<LevelObjective, Int> = objectiveProgress) {
-        if (gameState != "Playing") return // Nu verifica dacă jocul s-a terminat deja
+        if (gameState != "Playing") return
+        if (currentLevelData == null) return
 
-        if (currentLevelData == null) {
-            Log.w(TAG, "checkLevelEndCondition called with null level data!")
-            return
-        }
-
-        // --- LOG ÎNCEPUT VERIFICARE ---
         Log.d(TAG, "--- Checking Level End Condition for Level ${currentLevelData.levelId} ---")
-        // --- LOG STARE PROGRES ACTUAL ---
         Log.d(TAG, "Checking with Progress State: $progressToCheck")
 
-        // Verifică dacă TOATE obiectivele sunt îndeplinite
-        var allMet = true // Presupunem adevărat inițial
-        currentLevelData.objectives.forEach { objective -> // Iterează prin fiecare obiectiv al nivelului
+        var allMet = true
+        currentLevelData.objectives.forEach { objective ->
             val progress = progressToCheck[objective] ?: 0
             val target = objective.targetQuantity
             val isMet = progress >= target
-            Log.d(
-                TAG,
-                "Checking Objective: Type=${objective.type}, TargetID=${objective.targetId}, TargetQty=$target, CurrentProgress=$progress, IsMet=$isMet"
-            )
-            if (!isMet) {
-                allMet = false
-            }
+            if (!isMet) allMet = false
         }
-
-        // --- LOG REZULTAT FINAL VERIFICARE OBIECTIVE ---
         Log.d(TAG, "Final check: All Objectives Met = $allMet")
 
-        // --- Restul logicii ---
         if (allMet) {
-            // --- CONDIȚIE DE VICTORIE ---
             Log.i(TAG, "Level ${currentLevelData.levelId} WON!")
             gameState = "Won"
 
-            // --- Deblochează Rețete ---
-            val newlyUnlockedRecipes = mutableListOf<String>()
-            currentLevelData.unlocksRecipeIds.forEach { recipeId ->
-                Log.d(TAG, "Checking unlock for Recipe ID: $recipeId") // Log existent, e ok
-                if (availableRecipes.none { it.id == recipeId }) {
-                    Log.d(TAG, "Recipe ID $recipeId is NOT already available.") // Log existent, e ok
-                    allPossibleRecipes.find { it.id == recipeId }?.let { recipeToAdd ->
-                        Log.d(TAG, "Found recipe to add: ${recipeToAdd.name}") // Log existent, e ok
-                        availableRecipes = (availableRecipes + recipeToAdd).toMutableList()
-                        newlyUnlockedRecipes.add(recipeToAdd.name)
-                        Log.i(TAG, "Unlocked recipe: ${recipeToAdd.name}. New available list size: ${availableRecipes.size}") // Log existent, e ok
-                    } ?: Log.w(TAG, "Recipe ID $recipeId to unlock not found in allPossibleRecipes!") // Log existent, e ok
+            // NOU: Actualizează `maxUnlockedLevelIndex` dacă acest nivel era cel mai avansat deblocat
+            val currentLevelActualIndex = gameLevels.indexOfFirst { it.levelId == currentLevelData.levelId }
+            if (currentLevelActualIndex != -1 && currentLevelActualIndex == maxUnlockedLevelIndex) {
+                if (maxUnlockedLevelIndex < gameLevels.size - 1) { // Dacă nu e ultimul nivel din joc
+                    maxUnlockedLevelIndex++
+                    Log.i(TAG, "Unlocked next level. maxUnlockedLevelIndex is now: $maxUnlockedLevelIndex")
                 } else {
-                    Log.d(TAG, "Recipe ID $recipeId IS already available. Skipping.") // Log existent, e ok
+                    Log.i(TAG, "All levels completed! maxUnlockedLevelIndex remains at ${gameLevels.size -1}")
                 }
             }
 
+
+            val newlyUnlockedRecipes = mutableListOf<String>()
+            currentLevelData.unlocksRecipeIds.forEach { recipeId ->
+                if (availableRecipes.none { it.id == recipeId }) {
+                    allPossibleRecipes.find { it.id == recipeId }?.let { recipeToAdd ->
+                        availableRecipes = (availableRecipes + recipeToAdd).toMutableList()
+                        newlyUnlockedRecipes.add(recipeToAdd.name)
+                    }
+                }
+            }
             var winMessage = "Nivel ${currentLevelData.levelId} Terminat!"
             if (newlyUnlockedRecipes.isNotEmpty()) {
                 winMessage += "\nRețete noi: ${newlyUnlockedRecipes.joinToString()}"
             }
-            feedbackMessage = winMessage // Setează mesajul de victorie
-            playSound(context, R.raw.win) // Redă sunetul de victorie
-
+            feedbackMessage = winMessage
+            playSound(context, R.raw.win)
         } else if (movesLeft <= 0) {
-            // --- CONDIȚIE DE ÎNFRÂNGERE ---
             Log.i(TAG, "Level ${currentLevelData.levelId} LOST! No moves left.")
             gameState = "Lost"
-            playSound(context, R.raw.lost) // Redă sunetul de înfrângere
+            playSound(context, R.raw.lost)
             feedbackMessage = "Ai rămas fără mutări! Reîncearcă!"
-
-        } else {
-            // --- Nivelul Continuă ---
-            // Am eliminat logul de aici pentru că îl avem mai sus ("Final check: All Objectives Met = false")
-            // Log.d(TAG, "Level continues. Moves left: $movesLeft. Objectives met: $allMet")
         }
     }
 
 
-    // --- Funcție care gestionează logica click-ului pe piesă ---
     fun handleTileClick(row: Int, col: Int) {
-        // Pune TOATĂ logica din vechiul onTileClick aici
-        if (isProcessing || !swapAnimationFinished || gameState != "Playing") {
-            Log.d(
-                TAG,
-                "Click ignorat: processing=$isProcessing, animFinished=$swapAnimationFinished, state=$gameState"
-            )
-            // Folosim 'return' simplu pentru a ieși din funcție
-            return
-        }
+        if (isProcessing || !swapAnimationFinished || gameState != "Playing") return
 
         val clickedPos = TilePosition(row, col)
-        // --- Accesăm direct starea din Match3GameApp ---
         val currentSelection = selectedTilePos
+        playSound(context, R.raw.click)
 
-        Log.d(TAG, "handleTileClick: ($row, $col). Current selection: $currentSelection")
-        playSound(context, R.raw.click) // Sunet click piesă
-
-        // --- Funcție Helper pentru Adiacență ---
         fun areAdjacent(pos1: TilePosition, pos2: TilePosition): Boolean {
             val rowDiff = abs(pos1.row - pos2.row)
             val colDiff = abs(pos1.col - pos2.col)
             return (rowDiff == 1 && colDiff == 0) || (rowDiff == 0 && colDiff == 1)
         }
         if (currentSelection == null) {
-            selectedTilePos = clickedPos // Modifică starea direct
-            feedbackMessage = "Selectat: ($row, $col)"
+            selectedTilePos = clickedPos
         } else {
             if (clickedPos == currentSelection) {
                 selectedTilePos = null
-                feedbackMessage = "Deselectat"
-            } else if (areAdjacent(currentSelection, clickedPos)) { // Apelează funcția helper
-                // --- SWAP INIȚIAT ---
-                Log.d(TAG, "Adjacent click detected. Initiating swap attempt.")
-
-                // Consumă mutarea
+            } else if (areAdjacent(currentSelection, clickedPos)) {
                 if (movesLeft > 0) {
-                    movesLeft = movesLeft - 1 // Modifică starea direct
-                    Log.d(TAG, "Move consumed on swap attempt. Moves left NOW: $movesLeft")
-
-                    // Inițiază animația
+                    movesLeft -= 1
                     selectedTilePos = null
-                    feedbackMessage = "Schimbare..."
-                    swappingTiles = Pair(currentSelection, clickedPos) // Modifică starea direct
-                    swapAnimationFinished = false // Modifică starea direct
-
+                    swappingTiles = Pair(currentSelection, clickedPos)
+                    swapAnimationFinished = false
                 } else {
-                    Log.d(TAG, "Attempted swap but no moves left.")
                     feedbackMessage = "Fără mutări!"
                     selectedTilePos = null
-                    checkLevelEndCondition() // Apelează funcția helper
+                    checkLevelEndCondition()
                 }
-            } else { // Click neadiacent
+            } else {
                 selectedTilePos = clickedPos
-                feedbackMessage = "Selectat: ($row, $col)"
             }
         }
     }
-
 
 
     fun calculateGravityAndFill(currentBoardState: List<List<Int>>): Pair<List<MutableList<Int>>, List<TileMovementInfo>> {
         val numRows = currentBoardState.size
         val numCols = currentBoardState.firstOrNull()?.size ?: 0
-        if (numCols == 0) return Pair(emptyList(), emptyList()) // Tablă goală
+        if (numCols == 0) return Pair(emptyList(), emptyList())
 
         val finalBoardState = List(numRows) { MutableList(numCols) { EMPTY_TILE } }
         val movements = mutableListOf<TileMovementInfo>()
 
         for (c in 0 until numCols) {
-            var writeRow = numRows - 1 // Unde scriem următoarea piesă care cade (începem de jos)
-            // Procesăm coloana de jos în sus pentru gravitație
+            var writeRow = numRows - 1
             for (r in numRows - 1 downTo 0) {
                 val currentType = currentBoardState[r][c]
                 if (currentType != EMPTY_TILE) {
                     val fallDistance = writeRow - r
-                    if (writeRow != r) { // A căzut
-                        movements.add(TileMovementInfo(r, writeRow, c, currentType, false, fallDistance))
-                    } else { // Nu a căzut
-                        movements.add(TileMovementInfo(r, r, c, currentType, false, 0)) // O adăugăm oricum pentru a o avea în starea finală
-                    }
+                    movements.add(TileMovementInfo(r, writeRow, c, currentType, false, fallDistance))
                     finalBoardState[writeRow][c] = currentType
-                    writeRow-- // Mergem la rândul de deasupra pentru următoarea piesă
+                    writeRow--
                 }
             }
-            // Umple spațiile goale rămase sus cu piese noi
             for (r in writeRow downTo 0) {
                 val newType = TILE_TYPES.random()
                 finalBoardState[r][c] = newType
-                movements.add(TileMovementInfo(-1, r, c, newType, true, r + 1)) // OriginalRow -1 pt nou, fallDistance mare
+                movements.add(TileMovementInfo(-1, r, c, newType, true, r + 1))
             }
         }
-        return Pair(finalBoardState, movements) // Returnăm o listă imutabilă
+        return Pair(finalBoardState, movements)
     }
 
 
     suspend fun processMatchesAndCascades() {
-        var currentBoardInternal = board // Folosim o copie internă pt logica buclei
-        var cascadeMultiplier = 1.0
+        var currentBoardInternal = board
         var cascadeCount = 0
 
-        Log.d(TAG, ">>> Starting Cascade Processing <<<")
-
-        while(true) { // Bucla pentru cascade multiple
-            Log.d(TAG, "-- Checking for matches on internal board --")
+        while(true) {
             val matches = findMatchesOnBoard(currentBoardInternal)
-
-            // --- PASUL 0: Verificare Oprire Cascadă ---
             if (matches.isEmpty()) {
-                Log.d(TAG, "No more matches found. Finishing cascade sequence.")
-                // Afișare scor final al turei (dacă există)
-                // Verifică condiția de final nivel (victorie/înfrângere) ACUM
                 checkLevelEndCondition()
-                break // Ieși din bucla while
+                break
             }
             playSound(context, R.raw.potrivire)
-            // --- PASUL 1: Procesare Potrivire Curentă (Scor, Inventar, etc.) ---
             cascadeCount++
-            Log.d(TAG, "Cascade $cascadeCount: Found ${matches.size} matched tiles.")
-            // Calculează punctele, ingredientele câștigate din 'matches' și 'currentBoardInternal'
-            var basePointsThisMatch = 0
             val ingredientsEarnedThisMatch = mutableMapOf<Int, Int>()
             matches.forEach { pos ->
-                // Folosim currentBoardInternal pentru a citi tipul piesei ÎNAINTE de a o goli
                 if (pos.row in 0 until ROWS && pos.col in 0 until COLS) {
                     val tileType = currentBoardInternal.getOrNull(pos.row)?.getOrNull(pos.col)
                     if (tileType != null && tileType != EMPTY_TILE) {
-                        // Adaugă la ingrediente
-                        ingredientsEarnedThisMatch[tileType] =
-                            ingredientsEarnedThisMatch.getOrDefault(tileType, 0) + 1
-                        // Adaugă puncte de bază
-                        basePointsThisMatch += 10 // 10 puncte per piesă
+                        ingredientsEarnedThisMatch[tileType] = ingredientsEarnedThisMatch.getOrDefault(tileType, 0) + 1
                     }
                 }
-
             }
-            // Aplică bonusuri și multiplicator
-            if (matches.size >= 5) basePointsThisMatch += 100
-            else if (matches.size == 4) basePointsThisMatch += 50
-
-            // Actualizează inventarul de ingrediente
+            // MODIFICAT: Persistența inventarului - adăugăm la inventarul existent
             if (ingredientsEarnedThisMatch.isNotEmpty()) {
-                val currentInventory = inventory.toMutableMap()
+                val updatedInventory = inventory.toMutableMap()
                 ingredientsEarnedThisMatch.forEach { (ingredientId, quantity) ->
-                    currentInventory[ingredientId] =
-                        currentInventory.getOrDefault(ingredientId, 0) + quantity
+                    updatedInventory[ingredientId] = updatedInventory.getOrDefault(ingredientId, 0) + quantity
                 }
-                inventory = currentInventory // Actualizează starea inventarului
-                Log.d(TAG, "Inventory updated: $inventory") // Log adăugat anterior
+                inventory = updatedInventory // Actualizează starea globală a inventarului
+                Log.d(TAG, "Inventory updated by match: $inventory")
             }
 
-            // Actualizează progresul obiectivelor de COLECTARE
+
             if (ingredientsEarnedThisMatch.isNotEmpty()) {
                 val updatedProgressCollect = objectiveProgress.toMutableMap()
                 currentLevelData?.objectives?.forEach { objective ->
                     if (objective.type == ObjectiveType.COLLECT_INGREDIENTS) {
                         val ingredientId = objective.targetId
-                        val collectedNow =
-                            ingredientsEarnedThisMatch.getOrDefault(ingredientId, 0)
+                        val collectedNow = ingredientsEarnedThisMatch.getOrDefault(ingredientId, 0)
                         if (collectedNow > 0) {
                             val currentProg = updatedProgressCollect[objective] ?: 0
-                            updatedProgressCollect[objective] =
-                                (currentProg + collectedNow).coerceAtMost(objective.targetQuantity)
+                            updatedProgressCollect[objective] = (currentProg + collectedNow).coerceAtMost(objective.targetQuantity)
                         }
                     }
                 }
-                objectiveProgress = updatedProgressCollect // Aplică actualizările
+                objectiveProgress = updatedProgressCollect
             }
-
             val feedbackParts = ingredientsEarnedThisMatch.map { "+${it.value} ${getIngredientName(it.key)}" }
-            // Setează mesajul de feedback
-            feedbackMessage = if (cascadeCount > 1) {
-                "Cascadă $cascadeCount! ${feedbackParts.joinToString()} "
-            } else {
-                "Potrivire! ${feedbackParts.joinToString()} "
-            }
+            feedbackMessage = if (cascadeCount > 1) "Cascadă $cascadeCount! ${feedbackParts.joinToString()}" else "Potrivire! ${feedbackParts.joinToString()}"
 
-            // Crește multiplicatorul pentru următoarea cascadă
-            cascadeMultiplier += 0.5
+            tilesBeingMatched = matches
+            delay(400L)
+            tilesBeingMatched = emptySet()
 
-            // --- PASUL 2: Animație Dispariție ---
-            Log.d(TAG, "Cascade $cascadeCount: Starting disappear animation.")
-            tilesBeingMatched = matches // Informează GameTile să animeze dispariția
-            delay(400L) // Așteaptă animația de dispariție
-            tilesBeingMatched = emptySet() // Oprește efectul vizual de dispariție
-
-            // --- PASUL 3: Pregătire pentru Cădere ---
-            // 3a. Creează o reprezentare logică a tablei CU spații goale
             val boardWithEmptyTiles = currentBoardInternal.map { it.toMutableList() }
             matches.forEach { pos -> boardWithEmptyTiles[pos.row][pos.col] = EMPTY_TILE }
-
-            // --- Actualizăm starea 'board' ACUM cu golurile ---
-            // GameBoard va desena acum goluri în locurile pieselor dispărute
             board = boardWithEmptyTiles
-            currentBoardInternal = boardWithEmptyTiles // Continuăm logica cu această stare
-            Log.d(TAG, "Cascade $cascadeCount: Board updated with empty tiles.")
+            currentBoardInternal = boardWithEmptyTiles
 
-            // 3b. Calculează starea finală și mișcările necesare DUPĂ cădere/umplere
-            val (finalBoardState, tileMovements) = calculateGravityAndFill(currentBoardInternal) // Calculăm pe baza tablei cu goluri
+            val (finalBoardState, tileMovements) = calculateGravityAndFill(currentBoardInternal)
             if (tileMovements.isEmpty()) {
-                Log.d(TAG, "Cascade $cascadeCount: No tiles moved or fell. Checking for matches again.")
-                // Dacă doar au dispărut (ex: rândul de sus) și nimic nu cade,
-                // trebuie doar să actualizăm starea finală și să continuăm bucla
-                board = finalBoardState // Asigură că e starea corectă fără piese EMPTY
+                board = finalBoardState
                 currentBoardInternal = finalBoardState
-                continue // Treci la următoarea iterație a buclei while
+                continue
             }
-            Log.d(TAG, "Cascade $cascadeCount: Calculated ${tileMovements.size} tile movements.")
-
-            // --- PASUL 4: Animație Cădere/Apariție ---
-            Log.d(TAG, "Cascade $cascadeCount: Starting fall/appear animation.")
-            // 4a. Informează GameBoard despre mișcări (va porni animațiile în GameBoard)
             currentTileMovements = tileMovements
-            // !!! NU actualizăm 'board' la finalBoardState AICI !!!
-
-            // 4b. Așteaptă suficient timp pentru ca animațiile gestionate de GameBoard să se termine
             val maxFallDelay = 30L * COLS + 10L * ROWS
             val fallAnimDuration = 350L
-            val totalWaitTime = fallAnimDuration + maxFallDelay + 150L // Mărit bufferul puțin
-            Log.d(TAG, "Cascade $cascadeCount: Waiting ${totalWaitTime}ms for fall animations...")
+            val totalWaitTime = fallAnimDuration + maxFallDelay + 150L
             delay(totalWaitTime)
-            Log.d(TAG, "Cascade $cascadeCount: Fall animations assumed finished.")
 
-
-            // --- PASUL 5: Actualizare Finală Stare Logică ---
-            Log.d(TAG, "Cascade $cascadeCount: Applying final board state.")
-            board = finalBoardState // Actualizează starea logică la configurația finală
-
-            // Golește informațiile de mișcare (animațiile s-au terminat)
+            board = finalBoardState
             currentTileMovements = emptyList()
-            Log.d(TAG, "Cascade $cascadeCount: Cleared tile movements.")
-
-            // Pregătește următoarea iterație a buclei while cu starea finală
             currentBoardInternal = finalBoardState
-
-            Log.d(TAG, "--- End of Cascade $cascadeCount Iteration ---")
         }
-
-        Log.d(TAG, ">>> Cascade Processing Finished <<<")
-
     }
 
-
-
     fun performValidSwapAndProcess(pos1: TilePosition, pos2: TilePosition) {
-        Log.d(TAG, "Performing valid swap logic for $pos1, $pos2")
-        // Actualizează starea reală a tablei
         val newBoard = board.map { it.toMutableList() }
         val temp = newBoard[pos1.row][pos1.col]
         newBoard[pos1.row][pos1.col] = newBoard[pos2.row][pos2.col]
         newBoard[pos2.row][pos2.col] = temp
         board = newBoard
-
-        // Pornește procesarea logică
         isProcessing = true
-        feedbackMessage = ""
-        scope.launch { // Lansăm procesarea într-o corutină separată
+        scope.launch {
             processMatchesAndCascades()
             checkLevelEndCondition()
             isProcessing = false
-            Log.d(TAG, "Valid swap processing finished.")
         }
     }
 
-    // --- Funcție Helper pentru Verificare Gătit ---
     fun canCookRecipe(recipe: Recipe): Boolean {
-        // Verifică fiecare ingredient necesar
-        recipe.ingredientsNeeded.forEach { (ingredientId, quantityNeeded) ->
-            val quantityOwned = inventory.getOrDefault(ingredientId, 0) // Cât deține jucătorul
-            if (quantityOwned < quantityNeeded) {
-                // Dacă lipsește chiar și un singur ingredient, nu se poate găti
-                return false
-            }
+        return recipe.ingredientsNeeded.all { (ingredientId, quantityNeeded) ->
+            (inventory.getOrDefault(ingredientId, 0)) >= quantityNeeded
         }
-        // Dacă am ajuns aici, înseamnă că toate ingredientele sunt suficiente
-        return true
     }
-
 
     fun cookRecipe(recipe: Recipe) {
         if (!canCookRecipe(recipe)) {
-            Log.w(TAG, "Attempted to cook ${recipe.name} without enough ingredients!")
             feedbackMessage = "Nu ai suficiente ingrediente pentru ${recipe.name}!"
-            return // Nu continua dacă nu se poate găti
+            return
         }
-
-        Log.d(TAG, "Cooking recipe: ${recipe.name}")
-
-        // 1. Consumă ingredientele
-        val updatedInventory = inventory.toMutableMap() // Copie mutabilă
+        val updatedInventory = inventory.toMutableMap()
         recipe.ingredientsNeeded.forEach { (ingredientId, quantityNeeded) ->
-            val currentQuantity = updatedInventory.getOrDefault(ingredientId, 0)
-            // Scade cantitatea necesară (asigură-te că nu scazi sub 0, deși canCook a verificat)
-            updatedInventory[ingredientId] = (currentQuantity - quantityNeeded).coerceAtLeast(0)
+            updatedInventory[ingredientId] = (updatedInventory.getOrDefault(ingredientId, 0) - quantityNeeded).coerceAtLeast(0)
         }
-        inventory = updatedInventory // Actualizează starea inventarului
-        playSound(context, R.raw.gatire) // --- Redă sunetul de gătit ---
-
-        val xpGained = 50 // Exemplu: 50 XP per rețetă
-        playerXP += xpGained
-        Log.d(TAG, "Gained $xpGained XP. Total XP: $playerXP")
-
-        // ---  Acordă Monedă ---
+        inventory = updatedInventory
+        playSound(context, R.raw.gatire)
+        playerXP += 50
         val currentCookedAmount = cookedMealsInventory.getOrDefault(recipe.id, 0)
-        val updatedCookedInventory = cookedMealsInventory.toMutableMap()
-        updatedCookedInventory[recipe.id] = currentCookedAmount + 1
-        cookedMealsInventory = updatedCookedInventory // Actualizează starea cookedMealsInventory
-        Log.d(TAG, "Added ${recipe.name} to cooked inventory. New cooked inv: $cookedMealsInventory")
+        cookedMealsInventory = cookedMealsInventory + (recipe.id to currentCookedAmount + 1)
 
-        val updatedProgress = objectiveProgress.toMutableMap() // Copie curentă
+        val updatedProgress = objectiveProgress.toMutableMap()
         currentLevelData?.objectives?.forEach { objective ->
             if (objective.type == ObjectiveType.COOK_RECIPES && objective.targetId == recipe.id) {
                 val currentProg = updatedProgress[objective] ?: 0
                 updatedProgress[objective] = (currentProg + 1).coerceAtMost(objective.targetQuantity)
-                Log.d(TAG, "Cook objective progress for ${recipe.name}: ${updatedProgress[objective]}/${objective.targetQuantity}")
             }
         }
         objectiveProgress = updatedProgress
-        feedbackMessage = "Ai gătit ${recipe.name}! +$xpGained XP"
+        feedbackMessage = "Ai gătit ${recipe.name}! +50 XP"
         selectedRecipeToShow = null
-        checkLevelEndCondition(updatedProgress) // Pasează map-ul actualizat
+        checkLevelEndCondition(updatedProgress)
     }
 
-    // ---  Funcție pentru a trece la nivelul următor ---
+    // MODIFICAT: goToNextLevel nu mai incrementează direct currentLevelIndex, ci se bazează pe logica din checkLevelEndCondition
+    // și navigarea la hartă. Această funcție ar putea fi folosită de un buton "Următorul Nivel Deblocat" pe hartă,
+    // dar pentru moment o lăsăm așa, va fi apelată de butonul "Nivelul Următor" din GameScreen, care apoi va naviga la hartă.
     fun goToNextLevel() {
         Log.d(TAG, "goToNextLevel called. Current index: $currentLevelIndex")
-        playSound(context, R.raw.click) // Sunetul aici
+        playSound(context, R.raw.click)
+        // Logica de incrementare a currentLevelIndex va fi gestionată de selecția de pe hartă.
+        // Aici, doar schimbăm starea jocului dacă e cazul și eventual navigăm la hartă.
         if (currentLevelIndex < gameLevels.size - 1) {
-            currentLevelIndex++ // Incrementează starea
-            Log.d(TAG, "Moving to next level index: $currentLevelIndex")
+            // Nu mai schimbăm currentLevelIndex aici direct.
+            // Navigăm la hartă unde jucătorul va alege următorul nivel.
+            navigateTo(ActiveScreen.WORLD_MAP)
+            feedbackMessage = "Alege următorul nivel de pe hartă!"
         } else {
             Log.d(TAG, "All levels finished!")
-            gameState = "Finished" // Setează starea de final joc
-            feedbackMessage = "Felicitări! Ai terminat jocul!" // Mesaj final
+            gameState = "Finished" // Stare finală a jocului
+            feedbackMessage = "Felicitări! Ai terminat toate nivelele!"
+            navigateTo(ActiveScreen.WORLD_MAP) // Chiar și dacă a terminat, îl ducem la hartă
         }
     }
 
-    // --- Funcție pentru a reîncerca nivelul ---
+    // MODIFICAT: retryLevel acum resetează starea și reîncarcă nivelul curent, apoi navighează la GameScreen
     fun retryLevel() {
-        Log.d(TAG, "retryLevel called.")
+        Log.d(TAG, "retryLevel called for index: $currentLevelIndex")
         playSound(context, R.raw.click)
-        // Folosim trucul pentru a retrigera LaunchedEffect
-        val currentIdx = currentLevelIndex
-        currentLevelIndex = -1 // Invalid temporar
+        val levelToRetryIndex = currentLevelIndex // Păstrăm indexul curent
+
+        // Forțăm re-rularea LaunchedEffect pentru resetarea stării nivelului
+        // Setăm un index invalid temporar, apoi revenim la cel corect
+        currentLevelIndex = -1
         scope.launch {
-            delay(50)
-            currentLevelIndex = currentIdx // Revine, retrigerează resetarea
+            delay(50) // Mic delay pentru a permite recompoziția
+            currentLevelIndex = levelToRetryIndex
+            // După ce LaunchedEffect(currentLevelIndex) a resetat starea pentru nivelul corect,
+            // navigăm înapoi la GameScreen.
+            navigateTo(ActiveScreen.GAME) // Asigură-te că ajungi în GameScreen
+            Log.d(TAG, "Retry: Level state reset for index $currentLevelIndex, navigating to GAME.")
         }
     }
 
 
-
- // --- Resetare la începutul nivelului ---
-    // În @Composable fun Match3GameApp()
-
-    // --- Resetare la începutul nivelului ---
+    // MODIFICAT: `LaunchedEffect(currentLevelIndex)` - scos resetarea `inventory` și `cookedMealsInventory`
     LaunchedEffect(currentLevelIndex) {
         Log.d(TAG, "--- LaunchedEffect triggered for level index: $currentLevelIndex ---")
-        val levelData = gameLevels.getOrNull(currentLevelIndex) // Obține datele aici
+        val levelData = gameLevels.getOrNull(currentLevelIndex)
 
-        if (levelData != null) {
+        if (levelData != null && currentLevelIndex != -1) { // Adăugăm currentLevelIndex != -1 pentru a evita rularea pe starea invalidă
             Log.d(TAG, "Resetting state for Level ${levelData.levelId}: ${levelData.name}")
 
-            // Aplică upgrade-ul "Mutări Extra"
             val extraMovesLevel = playerUpgrades["extra_moves"] ?: 0
-            val bonusMoves = extraMovesLevel * 1 // Sau alt factor per nivel de upgrade
+            val bonusMoves = extraMovesLevel
             val totalInitialMoves = levelData.maxMoves + bonusMoves
 
-            // Resetează starea pentru noul nivel
             board = generateValidInitialBoard()
             movesLeft = totalInitialMoves
             objectiveProgress = levelData.objectives.associateWith { 0 }
-            inventory = emptyMap() // Resetează inventarul de ingrediente
-            // score = 0 // Resetează scorul (dacă încă îl folosești)
+            // inventory = emptyMap() // STERS: Inventarul nu se mai resetează aici
             gameState = "Playing"
             selectedTilePos = null
             tilesBeingMatched = emptySet()
@@ -1142,59 +906,32 @@ fun Match3GameApp() {
             swapAnimationFinished = true
             swappingTiles = null
             currentTileMovements = emptyList()
-            cookedMealsInventory = emptyMap() // Resetează și mâncarea gătită
-            // playerXP = 0 // Resetezi XP la fiecare nivel? Sau e global? Momentan e global.
+            // cookedMealsInventory = emptyMap() // STERS: Inventarul de mâncare gătită nu se mai resetează aici
 
-            // --- MODIFICAT/NOU: Construiește feedbackMessage cu obiectivul ---
             val firstObjectiveDescription = if (levelData.objectives.isNotEmpty()) {
-                // Pentru REACH_SCORE, progresul inițial e 0, scorul inițial e 0 (sau valoarea curentă a 'score' dacă nu se resetează)
-                // Dacă ai eliminat 'score', asigură-te că formatObjective nu mai necesită parametrul 'score'
-                // sau pasează o valoare placeholder cum ar fi 0.
-                formatObjective(levelData.objectives.first(), 0 /*progres inițial*/)
-            } else {
-                "Distrează-te!" // Mesaj dacă nu sunt obiective specifice
-            }
+                formatObjective(levelData.objectives.first(), 0)
+            } else "Distrează-te!"
             feedbackMessage = "Nivel ${levelData.levelId}: ${levelData.name}\n${firstObjectiveDescription}\nMutări: $totalInitialMoves"
             Log.d(TAG, "Initial feedback: $feedbackMessage")
-            // --- SFÂRȘIT MODIFICARE ---
-
-        } else {
+        } else if (currentLevelIndex != -1) { // Doar dacă nu e indexul invalid temporar
             Log.e(TAG, "Invalid level index or game finished: $currentLevelIndex")
-            if (currentLevelIndex >= gameLevels.size && gameLevels.isNotEmpty()) { // Verifică dacă am terminat toate nivelele definite
-                feedbackMessage = "Felicitări! Ai terminat toate nivelele jocului!"
-                gameState = "Finished"
-            } else if (gameLevels.isEmpty()) {
-                feedbackMessage = "Niciun nivel definit în joc!"
-                gameState = "Finished" // Sau altă stare de eroare
-            }
-            // Dacă currentLevelIndex e invalid (ex: -1 din retry), nu face nimic, se va corecta
+            // ... restul logicii de eroare/final joc ...
         }
     }
 
-
-    // --- Efect pentru a rula animația de SWAP ---
     LaunchedEffect(swappingTiles) {
-        val tilesToAnimate = swappingTiles // Perechea curentă care trebuie animată
+        val tilesToAnimate = swappingTiles
         if (tilesToAnimate != null) {
-            Log.d(TAG, "LaunchedEffect: Animating swap for $tilesToAnimate")
             val (pos1, pos2) = tilesToAnimate
             val xDiff = (pos2.col - pos1.col)
             val yDiff = (pos2.row - pos1.row)
-
-            // --- Calcul tileSize în Pixeli (aproximativ) ---
             var tileSizePx = 0f
-            // TODO: Găsește o metodă mai bună de a obține tileSize în pixeli aici
             playSound(context, R.raw.swap)
-            with(density) {
-                tileSizePx = 45.dp.toPx() // Ajustează 45.dp la o valoare realistă
-            }
-            Log.d(TAG, "Estimated tileSizePx for animation: $tileSizePx")
+            with(density) { tileSizePx = 45.dp.toPx() }
 
-            // --- Animația Inițială (Dus) ---
             val job1 = scope.launch {
                 tile1Offset.snapTo(IntOffset.Zero)
                 tile1Offset.animateTo(
-                    // Înmulțim diferența de grid cu dimensiunea în pixeli
                     targetValue = IntOffset(x = (xDiff * tileSizePx).toInt(), y = (yDiff * tileSizePx).toInt()),
                     animationSpec = tween(durationMillis = 250)
                 )
@@ -1202,88 +939,66 @@ fun Match3GameApp() {
             val job2 = scope.launch {
                 tile2Offset.snapTo(IntOffset.Zero)
                 tile2Offset.animateTo(
-                    // Înmulțim diferența de grid cu dimensiunea în pixeli
                     targetValue = IntOffset(x = (-xDiff * tileSizePx).toInt(), y = (-yDiff * tileSizePx).toInt()),
                     animationSpec = tween(durationMillis = 250)
                 )
             }
-
-            // Așteaptă finalul animației "dus"
-            Log.d(TAG, "Waiting for initial swap animation to join...")
             job1.join()
             job2.join()
-            Log.d(TAG, "Initial swap animation joined.")
 
-            // ---  Verifică dacă swap-ul a fost valid ---
-            val boardCheck = board.map { it.toMutableList() } // Verifică pe starea CURENTĂ
+            val boardCheck = board.map { it.toMutableList() }
             val tempCheck = boardCheck[pos1.row][pos1.col]
             boardCheck[pos1.row][pos1.col] = boardCheck[pos2.row][pos2.col]
             boardCheck[pos2.row][pos2.col] = tempCheck
             val potentialMatches = findMatchesOnBoard(boardCheck)
 
             if (potentialMatches.isNotEmpty()) {
-                // --- CAZ: SWAP VALID - Procesează potrivirile ---
-                Log.d(TAG, "Swap valid. Performing logic.")
-                tile1Offset.snapTo(IntOffset.Zero) // Resetează vizual
+                tile1Offset.snapTo(IntOffset.Zero)
                 tile2Offset.snapTo(IntOffset.Zero)
                 performValidSwapAndProcess(pos1, pos2)
-
             } else {
-                // --- CAZ: SWAP INVALID - Animație "Întors" ---
-                Log.d(TAG, "Swap was INVALID. Animating back.")
-                feedbackMessage = "Fără potrivire..." // Setează mesajul ACUM
+                feedbackMessage = "Fără potrivire..."
                 playSound(context, R.raw.swap_fail)
-                Log.d(TAG, "!!! SWAP INVALID - Initiating SHAKE BACK animation !!!")
-
-                // Animație rapidă înapoi la poziția inițială (offset 0)
-                val jobBack1 = scope.launch {
-                    tile1Offset.animateTo(
-                        targetValue = IntOffset.Zero, // Revine la 0 pixeli offset
-                        animationSpec = tween(durationMillis = 150)
-                    )
-                }
-                val jobBack2 = scope.launch {
-                    tile2Offset.animateTo(
-                        targetValue = IntOffset.Zero,
-                        animationSpec = tween(durationMillis = 150)
-                    )
-                }
-                // Așteaptă finalul animației "întors"
-                Log.d(TAG, "Waiting for shake back animations to join...")
+                val jobBack1 = scope.launch { tile1Offset.animateTo(IntOffset.Zero, tween(150)) }
+                val jobBack2 = scope.launch { tile2Offset.animateTo(IntOffset.Zero, tween(150)) }
                 jobBack1.join()
                 jobBack2.join()
-                Log.d(TAG, "Shake back animation joined.")
-
-                // Verifică finalul nivelului (poate a fost ultima mutare)
                 checkLevelEndCondition()
-                Log.d(TAG,"Invalid swap post-animation check done.")
             }
-
-            // --- Resetare finală indiferent de caz ---
-            swappingTiles = null // Gata cu acest swap
-            swapAnimationFinished = true // Permite următorul click/swap
-            Log.d(TAG, "Swap animation state reset.")
-
+            swappingTiles = null
+            swapAnimationFinished = true
         }
     }
 
     // === DECIZIA DE AFIȘARE A ECRANULUI PRINCIPAL ===
+    // MODIFICAT: Adăugat cazul pentru WORLD_MAP
     when (currentActiveScreen) {
         ActiveScreen.MENU -> {
-            Log.d(TAG, "Match3GameApp: Displaying MainMenuScreen") // LOG NOU
-
             MainMenuScreen(
-                onNavigateToGame = { navigateTo(ActiveScreen.GAME) },
+                // MODIFICAT: onNavigateToGame duce la WORLD_MAP
+                onNavigateToGame = { navigateTo(ActiveScreen.WORLD_MAP) },
                 onNavigateToRecipeBook = { navigateTo(ActiveScreen.RECIPE_BOOK) },
                 onNavigateToShop = { playSound(context, R.raw.click); showShopDialog = true },
                 onNavigateToUpgrades = { navigateTo(ActiveScreen.UPGRADES) }
             )
         }
+        ActiveScreen.WORLD_MAP -> { // NOU: Caz pentru afișarea hărții
+            WorldMapScreen(
+                allLevels = gameLevels,
+                maxUnlockedLevelIndex = maxUnlockedLevelIndex,
+                onSelectLevel = { selectedLevelIndex ->
+                    currentLevelIndex = selectedLevelIndex // Setează nivelul curent
+                    navigateTo(ActiveScreen.GAME) // Navighează la ecranul de joc
+                },
+                onNavigateToMenu = { navigateTo(ActiveScreen.MENU) },
+                // NOU: Callback-uri pentru acces la Rețete și Upgrade-uri de pe hartă
+                onNavigateToRecipeBook = { navigateTo(ActiveScreen.RECIPE_BOOK) },
+                onNavigateToUpgrades = { navigateTo(ActiveScreen.UPGRADES) },
+                playerMoney = playerMoney // Trimitem banii pentru afișare (opțional)
+            )
+        }
         ActiveScreen.GAME -> {
-            Log.d(TAG, "Match3GameApp: Displaying GameScreen") // LOG NOU
-
             GameScreen(
-                // Date de afișat
                 movesLeft = movesLeft,
                 currentLevelData = currentLevelData,
                 objectiveProgress = objectiveProgress,
@@ -1302,38 +1017,31 @@ fun Match3GameApp() {
                 playerMoney = playerMoney,
                 currentLevelId = currentLevelData?.levelId ?: -1,
                 tileMovements = currentTileMovements,
-                // Callback-uri
                 onTileClick = ::handleTileClick,
-                onShowShop = {
-                    playSound(context, R.raw.click)
-                    showShopDialog = true // Corect, setează starea dialogului
-                },
+                onShowShop = { playSound(context, R.raw.click); showShopDialog = true },
                 onRetryLevel = ::retryLevel,
-                onNextLevel = ::goToNextLevel,
+                onNextLevel = ::goToNextLevel, // Acum va duce la WORLD_MAP
                 onShowRecipeBook = { navigateTo(ActiveScreen.RECIPE_BOOK) },
                 onShowUpgrades = { navigateTo(ActiveScreen.UPGRADES) },
-                onNavigateBackToMenu = { navigateTo(ActiveScreen.MENU) }
-                // TODO: Adaugă un buton "Meniu" în GameScreen care setează currentActiveScreen = ActiveScreen.MENU
+                // MODIFICAT: Butonul de "Meniu" din GameScreen duce la WORLD_MAP
+                onNavigateBackToMenu = { navigateTo(ActiveScreen.WORLD_MAP) }
             )
         }
         ActiveScreen.RECIPE_BOOK -> {
-            Log.d(TAG, "Match3GameApp: Displaying RecipeBookScreen")
-
             RecipeBookScreen(
                 recipes = availableRecipes,
                 inventory = inventory,
                 canCookChecker = ::canCookRecipe,
                 onCookRecipe = ::cookRecipe,
                 onShowRecipeDetails = { recipe -> selectedRecipeToShow = recipe },
-                onClose = { // Acesta este apelat de butonul "Înapoi" din RecipeBookScreen
+                onClose = {
                     playSound(context, R.raw.click)
-                    Log.d(TAG, "Closing RecipeBook. Will return to: $previousActiveScreen (current is $currentActiveScreen)")
-                    currentActiveScreen = previousActiveScreen
+                    // MODIFICAT: Folosește `previousActiveScreen` stocat corect
+                    navigateTo(previousActiveScreen) // Se întoarce la ecranul anterior (Meniu sau Hartă)
                 }
             )
         }
         ActiveScreen.UPGRADES -> {
-            Log.d(TAG, "Match3GameApp: Displaying UpgradesScreen") // Log util
             UpgradesScreen(
                 allPossibleUpgrades = availableUpgrades,
                 currentOwnedUpgrades = playerUpgrades,
@@ -1341,23 +1049,21 @@ fun Match3GameApp() {
                 onPurchaseUpgrade = ::purchaseUpgrade,
                 onClose = {
                     playSound(context, R.raw.click)
-                    Log.d(TAG, "Closing Upgrades. Will return to: $previousActiveScreen (current is $currentActiveScreen)")
-                    currentActiveScreen = previousActiveScreen
+                    // MODIFICAT: Folosește `previousActiveScreen` stocat corect
+                    navigateTo(previousActiveScreen) // Se întoarce la ecranul anterior (Meniu sau Hartă)
                 }
             )
         }
     }
 
-
-    // --- Afișează dialogul PESTE orice ecran ---
     if (selectedRecipeToShow != null) {
         RecipeDetailDialog(
             recipe = selectedRecipeToShow!!,
             inventory = inventory,
             canCookChecker = ::canCookRecipe,
-            onCook = { recipeToCook -> // Asigură-te că onCook din dialog gestionează corect
+            onCook = { recipeToCook ->
                 cookRecipe(recipeToCook)
-                selectedRecipeToShow = null // Închide dialogul după gătit
+                selectedRecipeToShow = null
             },
             onDismiss = {
                 playSound(context, R.raw.click)
@@ -1366,15 +1072,13 @@ fun Match3GameApp() {
         )
     }
 
-
-    // --- Afișare Dialog Shop ---
     if (showShopDialog) {
         ShopDialog(
             cookedMeals = cookedMealsInventory,
             recipesData = allPossibleRecipes,
             onSellAll = {
                 sellCookedMeals()
-                showShopDialog = false // Închide dialogul după vânzare
+                showShopDialog = false
             },
             onDismiss = {
                 playSound(context, R.raw.click)
@@ -1382,14 +1086,13 @@ fun Match3GameApp() {
             }
         )
     }
-    // --- Funcție pentru Cumpărarea/Îmbunătățirea unui Upgrade ---
 }
 
 
 // --- GameScreen Composable ---
+// MODIFICAT: `onNavigateBackToMenu` va duce la Hartă, nu la Meniu direct
 @Composable
 fun GameScreen(
-    // Date de afișat
     movesLeft: Int,
     currentLevelData: LevelData?,
     objectiveProgress: Map<LevelObjective, Int>,
@@ -1398,7 +1101,7 @@ fun GameScreen(
     board: List<List<Int>>,
     selectedTilePosition: TilePosition?,
     tilesBeingMatched: Set<TilePosition>,
-    isProcessing: Boolean, // Indică dacă utilizatorul ar trebui blocat
+    isProcessing: Boolean,
     gameState: String,
     playerXP: Int,
     playerMoney: Int,
@@ -1406,243 +1109,149 @@ fun GameScreen(
     swappingTilesInfo: Pair<TilePosition, TilePosition>?,
     tile1AnimatedOffset: IntOffset,
     tile2AnimatedOffset: IntOffset,
-    // Callback-uri
     onTileClick: (row: Int, col: Int) -> Unit,
     onShowRecipeBook: () -> Unit,
     onRetryLevel: () -> Unit,
     onNextLevel: () -> Unit,
-    currentLevelId: Int, //  Primește ID-ul nivelului curent
-    onShowShop: () -> Unit, // Callback pentru shop
+    currentLevelId: Int,
+    onShowShop: () -> Unit,
     onShowUpgrades: () -> Unit,
     tileMovements: List<TileMovementInfo>,
-    onNavigateBackToMenu: () -> Unit
+    onNavigateBackToMenu: () -> Unit // Callback pentru a naviga înapoi (la Hartă)
 ) {
-    Log.d(TAG, "GameScreen: Composing - Level: ${currentLevelData?.levelId}, GameState: $gameState") // LOG NOU
-
-    val context = LocalContext.current // Obține context
-
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .systemBarsPadding() // Padding pentru barele sistemului
-            .padding(16.dp), // Padding general
+            .systemBarsPadding()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // --- Rând Superior: Buton Înapoi, XP, Bani, Rețete, Shop, Upgrades ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween, // MODIFICAT pentru a spația mai bine
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // MODIFICAT: Butonul este acum "Înapoi la Hartă"
+            IconButton(onClick = {
+                playSound(context, R.raw.click)
+                onNavigateBackToMenu() // Acesta duce la hartă
+            }) {
+                // Poți schimba iconița dacă dorești (ex: o hartă mică sau o săgeată specifică)
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Înapoi la Hartă")
+            }
 
-        // --- Afișare Stare Joc (Victorie/Înfrângere) ---
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("XP:", fontSize = 16.sp, fontWeight = FontWeight.Bold) // Font mai mic
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(playerXP.toString(), fontSize = 16.sp)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(painterResource(id = R.drawable.coin), contentDescription = "Bani", modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(playerMoney.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable { playSound(context, R.raw.click); onShowRecipeBook() }
+            ) {
+                Image(painterResource(id = R.drawable.carte), contentDescription = "Rețete", modifier = Modifier.size(30.dp))
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(availableRecipesCount.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+            }
+            IconButton(onClick = { playSound(context, R.raw.click); onShowShop() }) {
+                Image(painterResource(id = R.drawable.market), contentDescription = "Magazin", modifier = Modifier.size(28.dp))
+            }
+            IconButton(onClick = { playSound(context, R.raw.click); onShowUpgrades() }) {
+                Image(painterResource(id = R.drawable.upgrade), contentDescription = "Îmbunătățiri", modifier = Modifier.size(26.dp))
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // --- Butoane Victorie/Înfrângere ---
         if (gameState == "Won") {
             Button(onClick = {
-                playSound(context, R.raw.click) // Sunet click UI !!!
-                onNextLevel()
-            }) { Text("Nivelul Următor") }
-        }
-        else if (gameState == "Lost") {
+                playSound(context, R.raw.click)
+                onNextLevel() // Acum onNextLevel va naviga la hartă
+            }) { Text("Continuă spre Hartă") } // MODIFICAT text buton
+        } else if (gameState == "Lost") {
             Button(onClick = {
-                playSound(context, R.raw.click) // Sunet click UI !!!
+                playSound(context, R.raw.click)
                 onRetryLevel()
             }) { Text("Reîncearcă Nivelul") }
         }
 
-        // --- Rând Superior:  XP, Rețete ---
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // --- Buton Meniu/Înapoi ---
-            IconButton(onClick = onNavigateBackToMenu) {
-                Icon(
-                    imageVector = Icons.Filled.Menu, // Sau Home, sau altă iconiță
-                    contentDescription = "Meniu Principal",
-                    tint = MaterialTheme.colorScheme.onSurface // Sau altă culoare
-                )
-            }
-            // Grup XP
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("XP:", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(playerXP.toString(), /* ... stil ... */) }
 
-            // --- Grup Bani (Monedă) ---
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painterResource(id = R.drawable.coin),
-                    contentDescription = "Bani",
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = playerMoney.toString(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-
-
-            // Grup Rețete (cu iconiță)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable { onShowRecipeBook() } // Aplică clickable AICI
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.carte),
-                    contentDescription = "Rețete (${availableRecipesCount})", // Descriere mai bună
-                    modifier = Modifier.size(40.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = availableRecipesCount.toString(),
-                    style = MaterialTheme.typography.bodyLarge, // Ajustează stilul dacă vrei
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            // --- Grup Shop (Iconiță Clickabilă) ---
-            IconButton(onClick = {
-                playSound(context, R.raw.click)
-                onShowShop() // Deschide dialogul Shop
-            }) {
-                Image(
-                    painter = painterResource(id = R.drawable.market),
-                    contentDescription = "Magazin (Vinde Produse)",
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-
-            // --- Grup Upgrade-uri (Iconiță Clickabilă) ---
-            IconButton(onClick = {
-                playSound(context, R.raw.click)
-                onShowUpgrades() // Apelează noul callback
-            }) {
-                Image(
-                    painter = painterResource(id = R.drawable.upgrade),
-                    contentDescription = "Îmbunătățiri",
-                    modifier = Modifier.size(30.dp)
-                )
-            }
-
-
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-
-
-        // --- Rând Info Nivel: Mutări și Obiective Compacte ---
         if (currentLevelData != null && gameState == "Playing") {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // Nume Nivel
                 Text(
                     text = "Nivel ${currentLevelData.levelId}: ${currentLevelData.name}",
-                    style = MaterialTheme.typography.titleSmall, // Font mai mic
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-
-                // Rând pentru Mutări și Obiective Principale
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly, // Sau SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Mutări Rămase
                     Text(
                         text = "Mutări: $movesLeft",
-                        style = MaterialTheme.typography.bodyMedium, // Font normal
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold,
                         color = if (movesLeft <= 5 && movesLeft > 0) Color.Red else MaterialTheme.colorScheme.onSurface
                     )
-
-                    // --- Afișare Obiective  ---
-                    // Afișăm doar 1-2 obiective principale sau folosim iconițe
-                    // Exemplu: Afișează doar PRIMUL obiectiv neîndeplinit
                     val firstUnmetObjective = currentLevelData.objectives.firstOrNull { (objectiveProgress[it] ?: 0) < it.targetQuantity }
                     if (firstUnmetObjective != null) {
                         val progress = objectiveProgress[firstUnmetObjective] ?: 0
-                        val objectiveText = formatObjective(firstUnmetObjective, progress) // Folosim o funcție helper
-                        Text(
-                            text = "🎯 $objectiveText", // Folosim emoji sau iconiță
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontSize = 13.sp // Font puțin mai mic
-                        )
+                        Text("🎯 ${formatObjective(firstUnmetObjective, progress)}", style = MaterialTheme.typography.bodyMedium, fontSize = 13.sp)
                     } else if (currentLevelData.objectives.isNotEmpty()) {
-                        // Toate obiectivele sunt îndeplinite (dar jocul nu s-a terminat încă?)
                         Text("Obiectiv realizat! ✅", fontSize = 13.sp, color = Color.Gray)
                     }
-                    // TODO: Poți adăuga un mic indicator dacă sunt MAI MULTE obiective
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // --- Mesaj Feedback  ---
-        Text(text = feedbackMessage, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().heightIn(min = 18.dp), fontSize = 15.sp)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // --- Afișaj Inventar  ---
-        Text("Inventar Ingrediente:", style = MaterialTheme.typography.labelLarge) // Sau alt stil
-        Spacer(modifier = Modifier.height(4.dp))
-        Row(
+        Text(
+            text = feedbackMessage,
+            textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp), // Padding redus poate?
-            horizontalArrangement = if (inventory.isEmpty()) Arrangement.Center else Arrangement.Start // Centrează mesajul dacă e gol
+                .heightIn(min = 40.dp),
+            fontSize = 15.sp)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text("Inventar Ingrediente:", style = MaterialTheme.typography.labelLarge)
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalArrangement = if (inventory.isEmpty()) Arrangement.Center else Arrangement.Start
         ) {
             if (inventory.isEmpty()) {
-                Text("Rucsacul e gol! Joacă pentru ingrediente.", fontSize = 12.sp, color = Color.Gray)
+                Text("Rucsacul e gol!", fontSize = 12.sp, color = Color.Gray)
             } else {
-                // Folosim LazyRow dacă pot fi multe ingrediente și vrem scroll orizontal
-                // Sau un FlowRow (experimental) pentru a se înfășura pe mai multe rânduri.
-                // Momentan, un Row simplu care poate depăși ecranul dacă sunt prea multe.
                 inventory.entries.sortedBy { it.key }.forEach { (ingredientId, quantity) ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 6.dp) // Spațiu între itemele din inventar
-                    ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 6.dp)) {
                         val drawableResId = tileDrawables[ingredientId]
                         if (drawableResId != null) {
-                            Image(
-                                painter = painterResource(id = drawableResId),
-                                contentDescription = getIngredientName(ingredientId),
-                                modifier = Modifier.size(28.dp) // Mărime iconiță inventar
-                            )
+                            Image(painter = painterResource(id = drawableResId), contentDescription = getIngredientName(ingredientId), modifier = Modifier.size(28.dp))
                         } else {
                             Box(Modifier.size(28.dp).background(tileColors[ingredientId] ?: Color.Gray, CircleShape))
                         }
-                        Text(
-                            text = quantity.toString(),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        // Opcional, numele sub cantitate
-                        // Text(getIngredientName(ingredientId), fontSize = 9.sp)
+                        Text(text = quantity.toString(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Afișează butonul pentru piata
-        val shouldShowShopButton = currentLevelId == 1
-        // Sau poți folosi gameState == "Won" și o condiție pe levelId
-        if (shouldShowShopButton && gameState == "Playing") { // Sau la final de nivel? Momentan în timpul jocului
-            Spacer(modifier = Modifier.height(10.dp))
-
-        }
-
-
-
-
-
-
-        // --- Tabla de Joc ---
-        // Folosim weight pentru a împinge tabla în jos, DAR nu prea mult
-        Box(modifier = Modifier.weight(0.8f)) { // Încearcă diferite valori < 1f
+        Box(modifier = Modifier.weight(0.8f)) {
             if (gameState == "Playing" || gameState == "Won" || gameState == "Lost") {
                 GameBoard(
-                    onTileClick = { row, col ->
-                        if (gameState == "Playing" && !isProcessing)
-                        onTileClick(row, col)
-                    },
+                    onTileClick = { row, col -> if (gameState == "Playing" && !isProcessing) onTileClick(row, col) },
                     board = board,
                     selectedTilePosition = selectedTilePosition,
                     tilesBeingMatched = tilesBeingMatched,
@@ -1651,104 +1260,85 @@ fun GameScreen(
                     tile2AnimatedOffset = tile2AnimatedOffset,
                     tileMovements = tileMovements
                 )
-            } else { /* Spacer sau mesaj "Joc Terminat" */ }
+            }
         }
-
-        // Spacer final mic
         Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
 
-// --- Funcție Helper pentru Formatare Obiectiv (la nivel de fișier sau în App) ---
 fun formatObjective(objective: LevelObjective, progress: Int): String {
     val targetQuantity = objective.targetQuantity
-
-    // Ajustăm progresul curent pentru a nu depăși ținta la afișare
-    val displayProgress = when (objective.type) {
-        else -> progress.coerceAtMost(targetQuantity) // Pentru COLLECT_INGREDIENTS, COOK_RECIPES
-    }
-
+    val displayProgress = progress.coerceAtMost(targetQuantity)
     return when (objective.type) {
-        ObjectiveType.COLLECT_INGREDIENTS -> {
-            // Asigură-te că getIngredientName gestionează corect ID-ul din objective.targetId
-            val ingredientName = getIngredientName(objective.targetId)
-            "Colectează $ingredientName: $displayProgress / $targetQuantity"
-        }
-        ObjectiveType.COOK_RECIPES -> {
-            // Găsește numele rețetei după ID-ul stocat în objective.targetId
-            val recipeName = allPossibleRecipes.find { it.id == objective.targetId }?.name ?: "Rețetă ID ${objective.targetId}"
-            "Gătește $recipeName: $displayProgress / $targetQuantity"
-        }
-        // Adaugă aici alte cazuri dacă vei avea noi ObjectiveType
+        ObjectiveType.COLLECT_INGREDIENTS -> "Colectează ${getIngredientName(objective.targetId)}: $displayProgress/$targetQuantity"
+        ObjectiveType.COOK_RECIPES -> "Gătește ${allPossibleRecipes.find { it.id == objective.targetId }?.name ?: "Rețetă"}: $displayProgress/$targetQuantity"
     }
 }
 
 
-// --- RecipeBookScreen Composable (Simplificat - primește totul ca parametri) ---
+// MODIFICAT: `onClose` din RecipeBookScreen acum folosește previousActiveScreen gestionat mai bine
 @Composable
 fun RecipeBookScreen(
     recipes: List<Recipe>,
     inventory: Map<Int, Int>,
     canCookChecker: (Recipe) -> Boolean,
-    onCookRecipe: (Recipe) -> Unit, // Pasează funcția de gătit reală
-    onShowRecipeDetails: (Recipe) -> Unit, // Pentru a deschide dialogul
-    onClose: () -> Unit
+    onCookRecipe: (Recipe) -> Unit,
+    onShowRecipeDetails: (Recipe) -> Unit,
+    onClose: () -> Unit // Acest onClose va fi apelat de Match3GameApp pentru a naviga la previousActiveScreen
 ) {
-    // NU mai are nevoie de stare locală pentru dialog
-    // var recipeForDialog by remember { mutableStateOf<Recipe?>(null) }
     val context = LocalContext.current
-    Column(  modifier = Modifier
-        .fillMaxSize()
-        .systemBarsPadding()
-        .padding(16.dp) ) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .systemBarsPadding()
+            .padding(16.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = {
-                playSound(context, R.raw.click) // Sunet UI
-                onClose()
+                playSound(context, R.raw.click)
+                onClose() // Apelează callback-ul care va naviga la previousActiveScreen
             }) { Icon(Icons.Default.ArrowBack, contentDescription = "Înapoi") }
             Spacer(modifier = Modifier.width(8.dp))
             Text("Cartea Mea de Bucate", style = MaterialTheme.typography.headlineSmall)
         }
         Spacer(modifier = Modifier.height(16.dp))
-
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(recipes, key = { it.id }) { recipe ->
-                val canCook = remember(inventory, recipe) { canCookChecker(recipe) }
+                // val canCook = remember(inventory, recipe) { canCookChecker(recipe) } // Nu mai e nevoie aici, e in dialog
                 Column(
-                    modifier = Modifier.clickable {
-                        playSound(context, R.raw.click) // Sunet UI
-                        onShowRecipeDetails(recipe)
-                    }
+                    modifier = Modifier
+                        .clickable {
+                            playSound(context, R.raw.click)
+                            onShowRecipeDetails(recipe)
+                        }
                         .fillMaxWidth()
-                        .clickable { onShowRecipeDetails(recipe) } // Apelează callback-ul pentru dialog
                         .padding(vertical = 8.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) { /* ... Nume + Indicator Gata/Lipsă ... */ }
-                    Text(recipe.name, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text(recipe.name, style = MaterialTheme.typography.titleMedium) // Afișează numele
+                    Text(recipe.description, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 }
                 Divider()
             }
-            if (recipes.isEmpty()){ /* ... item listă goală ... */ }
+            if (recipes.isEmpty()) {
+                item { Text("Nicio rețetă deblocată încă.", modifier = Modifier.padding(16.dp)) }
+            }
         }
     }
 }
 
 
-
-// --- Composable pentru Dialogul Detalii Rețetă ---
 @Composable
 fun RecipeDetailDialog(
-    recipe: Recipe, // Rețeta de afișat
-    inventory: Map<Int, Int>, // Inventarul curent pentru verificare
-    canCookChecker: (Recipe) -> Boolean, // Funcția care verifică dacă se poate găti
-    onCook: (Recipe) -> Unit, // Funcția de apelat la apăsarea "Gătește"
-    onDismiss: () -> Unit // Funcția de apelat la închiderea dialogului
+    recipe: Recipe,
+    inventory: Map<Int, Int>,
+    canCookChecker: (Recipe) -> Boolean,
+    onCook: (Recipe) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    val canCookCurrentRecipe = remember(inventory, recipe) { canCookChecker(recipe) } // Verifică dacă se poate găti
-    val context = LocalContext.current
+    val canCookCurrentRecipe = remember(inventory, recipe) { canCookChecker(recipe) }
     AlertDialog(
-        onDismissRequest = onDismiss, // Apelează funcția primită
+        onDismissRequest = onDismiss,
         title = { Text(text = recipe.name) },
         text = {
             Column {
@@ -1757,13 +1347,11 @@ fun RecipeDetailDialog(
                 Text("Ingrediente Necesare:", fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
                 recipe.ingredientsNeeded.forEach { (ingredientId, quantityNeeded) ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(vertical = 2.dp)
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                         val drawableResId = tileDrawables[ingredientId]
-                        if (drawableResId != null) { /* ... Image ... */ }
-                        else { /* ... Box fallback ... */ }
+                        if (drawableResId != null) {
+                            Image(painterResource(id = drawableResId), contentDescription = null, modifier = Modifier.size(20.dp))
+                        } else { Box(Modifier.size(20.dp).background(tileColors[ingredientId] ?: Color.Gray, CircleShape)) }
                         Spacer(modifier = Modifier.width(8.dp))
                         val quantityOwned = inventory.getOrDefault(ingredientId, 0)
                         Text("${getIngredientName(ingredientId)}: $quantityOwned / $quantityNeeded")
@@ -1776,137 +1364,83 @@ fun RecipeDetailDialog(
         },
         confirmButton = {
             Row {
-                TextButton(
-                    onClick = {
-                        onCook(recipe) // Apelează funcția primită
-                    },
-                    enabled = canCookCurrentRecipe
-                ) {
-                    Text("Gătește")
-                }
+                TextButton(onClick = { onCook(recipe) }, enabled = canCookCurrentRecipe) { Text("Gătește") }
                 Spacer(Modifier.width(8.dp))
-                TextButton(onClick = onDismiss) { // Apelează funcția primită
-                    Text("Înapoi")
-                }
+                TextButton(onClick = onDismiss) { Text("Înapoi") }
             }
         }
     )
 }
 
-// --- GameTile Composable ---
 @Composable
 fun GameTile(
-    modifier: Modifier = Modifier, // Modifier extern (poziție, etc.)
+    modifier: Modifier = Modifier,
     type: Int,
     size: Dp,
     isSelected: Boolean,
-    isDisappearing: Boolean, // Doar pentru dispariție
-    animatedOffset: IntOffset, // Doar pentru SWAP
+    isDisappearing: Boolean,
+    animatedOffset: IntOffset,
     onClick: () -> Unit
 ) {
-    // Stări DOAR pentru Dispariție
     val disappearingScale = remember { Animatable(1f) }
     val disappearingAlpha = remember { Animatable(1f) }
-
-    // LaunchedEffect DOAR pentru Dispariție
     LaunchedEffect(isDisappearing) {
         if (isDisappearing) {
             launch { disappearingScale.animateTo(0.3f, tween(300)) }
             launch { disappearingAlpha.animateTo(0f, tween(300)) }
         } else {
-            // Resetare dispariție (dacă nu dispare)
             if (disappearingScale.value != 1f) disappearingScale.snapTo(1f)
             if (disappearingAlpha.value != 1f) disappearingAlpha.snapTo(1f)
         }
     }
-
-    // Modificator Selecție
-    val selectionModifier = if (isSelected) {
-        Modifier // Începe lanțul pentru stare selectată
-            .border(
-                width = 2.dp, // Sau 3.dp
-                color = Color.Yellow,
-                shape = MaterialTheme.shapes.small
-            )
-            .scale(1.05f) // Mărește ușor
-    } else { Modifier }
-
+    val selectionModifier = if (isSelected) Modifier.border(2.dp, Color.Yellow, MaterialTheme.shapes.small).scale(1.05f) else Modifier
     val drawableResId = tileDrawables[type]
-
-    // Combinăm Modifiers
-    val combinedModifier = modifier // Modifier extern
-        .offset { animatedOffset } // Offset Swap
-        .graphicsLayer { // Doar Scale/Alpha pentru dispariție
-            scaleX = disappearingScale.value
-            scaleY = disappearingScale.value
-            this.alpha = disappearingAlpha.value
-        }
-        .size(size)
-        .padding(1.dp)
-        .then(selectionModifier)
-        .background(
-            color = tileColors[type]?.copy(alpha = 0.4f) ?: Color.Gray.copy(alpha = 0.4f),
-            shape = MaterialTheme.shapes.small
-        )
-        .clickable(onClick = onClick)
-
     Box(
-        modifier = combinedModifier,
+        modifier = modifier
+            .offset { animatedOffset }
+            .graphicsLayer {
+                scaleX = disappearingScale.value
+                scaleY = disappearingScale.value
+                this.alpha = disappearingAlpha.value
+            }
+            .size(size)
+            .padding(1.dp)
+            .then(selectionModifier)
+            .background(tileColors[type]?.copy(alpha = 0.4f) ?: Color.Gray.copy(alpha = 0.4f), MaterialTheme.shapes.small)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         if (drawableResId != null) {
-            Image(
-                painter = painterResource(
-                    id = drawableResId),
-                contentDescription = getIngredientName(type),
-                modifier = Modifier.fillMaxSize(0.8f)
-            )
+            Image(painter = painterResource(id = drawableResId), contentDescription = getIngredientName(type), modifier = Modifier.fillMaxSize(0.8f))
         }
     }
 }
 
 
-// --- GameBoard Composable ---
 @Composable
 fun GameBoard(
-    board: List<List<Int>>, // Starea logică (poate avea EMPTY_TILE în timpul anim.)
+    board: List<List<Int>>,
     selectedTilePosition: TilePosition?,
-    tilesBeingMatched: Set<TilePosition>, // Piesele care dispar ACUM
+    tilesBeingMatched: Set<TilePosition>,
     swappingTilesInfo: Pair<TilePosition, TilePosition>?,
     tile1AnimatedOffset: IntOffset,
     tile2AnimatedOffset: IntOffset,
-    tileMovements: List<TileMovementInfo>, // Mișcările de cădere/apariție ACTIVE
+    tileMovements: List<TileMovementInfo>,
     onTileClick: (row: Int, col: Int) -> Unit
 ) {
     BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .background(Color(0xFFA0A0A0))
-            .padding(4.dp)
+        modifier = Modifier.fillMaxWidth().aspectRatio(1f).background(Color(0xFFA0A0A0)).padding(4.dp)
     ) {
         val tileSize = maxWidth / COLS
         val tileSizePx = with(LocalDensity.current) { tileSize.toPx() }
-        Log.d(TAG, "GameBoard Recomposing. Movements: ${tileMovements.size}, Matched: ${tilesBeingMatched.size}")
-
-        // Container principal pentru a suprapune piesele statice și cele animate
         Box(modifier = Modifier.fillMaxSize()) {
-
-            // --- 1. Desenăm Grid-ul de Bază (Static + Cele care Dispar) ---
-            Column { // Folosim Column/Row pentru layout-ul de bază
+            Column {
                 board.forEachIndexed { rowIndex, rowData ->
                     Row {
                         rowData.forEachIndexed { colIndex, logicalTileType ->
                             val currentPos = TilePosition(rowIndex, colIndex)
-                            // Verificăm dacă o piesă se mișcă SPRE această poziție
                             val isTileMovingToThisSpot = tileMovements.any { it.finalRow == rowIndex && it.col == colIndex }
-                            // Verificăm dacă ACEASTĂ piesă dispare
                             val isDisappearing = tilesBeingMatched.contains(currentPos)
-
-                            // --- Desenăm ceva în această celulă? ---
-                            // Desenăm dacă:
-                            // - Piesa logică NU e goală ȘI NU vine alta peste ea
-                            // SAU dacă piesa de aici dispare ACUM (pentru a rula anim. dispariție)
                             if ((logicalTileType != EMPTY_TILE && !isTileMovingToThisSpot) || isDisappearing) {
                                 val isSelected = currentPos == selectedTilePosition
                                 val swapOffset = when (currentPos) {
@@ -1914,107 +1448,67 @@ fun GameBoard(
                                     swappingTilesInfo?.second -> tile2AnimatedOffset
                                     else -> IntOffset.Zero
                                 }
-
                                 GameTile(
-                                    // Fără modifier de poziție extern, e în Column/Row
-                                    // Tipul este cel logic din board, pt că GameTile va dispărea dacă isDisappearing=true
-                                    type = logicalTileType,
-                                    size = tileSize,
-                                    isSelected = isSelected,
-                                    isDisappearing = isDisappearing, // Pasează corect starea
-                                    animatedOffset = swapOffset, // Doar offset-ul de SWAP
-                                    // NU pasăm movementInfo sau tileSizePx la GameTile simplificat
+                                    type = logicalTileType, size = tileSize, isSelected = isSelected,
+                                    isDisappearing = isDisappearing, animatedOffset = swapOffset,
                                     onClick = { onTileClick(rowIndex, colIndex) }
                                 )
                             } else {
-                                // Altfel, lăsăm un spațiu gol în grid
                                 Spacer(modifier = Modifier.size(tileSize))
                             }
                         }
                     }
                 }
-            } // --- Sfârșit Grid de Bază ---
-
-
-            // --- 2. Desenăm piesele ÎN MIȘCARE (Cădere/Apariție) PESTE ---
+            }
             tileMovements.forEach { movement ->
-                // Starea inițială a animației
                 val initialOffsetY = if (movement.isNew) -tileSizePx * (movement.finalRow.toFloat() + 3f) else -(movement.fallDistance * tileSizePx)
                 val initialAlpha = if (movement.isNew) 0f else 1f
-
-                // Animatable PENTRU ACEASTĂ INSTANȚĂ DE MIȘCARE
-                // Folosim movement ca cheie pentru remember, ca să fie unic pt fiecare mișcare
                 val translationY = remember(movement) { Animatable(initialOffsetY) }
                 val alpha = remember(movement) { Animatable(initialAlpha) }
-
-                // Rulează animația specifică acestei piese
                 LaunchedEffect(movement) {
                     val delayMillis = (movement.col * 30L + movement.fallDistance * 10L).toInt()
-                    Log.d(TAG, "Animating Fall: T=${movement.tileType} to (${movement.finalRow},${movement.col}) from Y=${initialOffsetY.toInt()} with delay=$delayMillis")
-                    launch { translationY.animateTo(0f, tween(350, delayMillis)) } // Durata căderii
+                    launch { translationY.animateTo(0f, tween(350, delayMillis)) }
                     if (movement.isNew) { launch { alpha.animateTo(1f, tween(350, delayMillis)) } }
                     else { alpha.snapTo(1f) }
                 }
-
-                // Calculăm poziția X și Y finală în Box-ul mare
                 val finalPosX = movement.col * tileSizePx
                 val finalPosY = movement.finalRow * tileSizePx
-
-                // Calculăm offset-ul de la SWAP (dacă piesa AJUNGE într-o poziție de swap)
                 val finalPos = TilePosition(movement.finalRow, movement.col)
                 val swapOffset = when (finalPos) {
                     swappingTilesInfo?.first -> tile1AnimatedOffset
                     swappingTilesInfo?.second -> tile2AnimatedOffset
                     else -> IntOffset.Zero
                 }
-
-                // Desenăm piesa în mișcare într-un Box poziționat manual
                 Box(
                     modifier = Modifier
-                        .graphicsLayer { // Aplicăm alpha AICI
-                            this.alpha = alpha.value
-                        }
-                        .offset { // Aplicăm poziția finală + căderea animată + swap AICI
-                            IntOffset(
-                                x = finalPosX.toInt() + swapOffset.x,
-                                y = finalPosY.toInt() + translationY.value.toInt() + swapOffset.y
-                            )
-                        }
+                        .graphicsLayer { this.alpha = alpha.value }
+                        .offset { IntOffset(x = finalPosX.toInt() + swapOffset.x, y = finalPosY.toInt() + translationY.value.toInt() + swapOffset.y) }
                 ) {
                     GameTile(
-                        // Fără modifier explicit de poziție aici
-                        type = movement.tileType, // Tipul piesei care cade/apare
-                        size = tileSize,
-                        isSelected = (finalPos == selectedTilePosition), // Verificăm selecția pe poziția finală
-                        isDisappearing = false, // O piesă care cade/apare nu dispare
-                        animatedOffset = IntOffset.Zero, // Swap-ul e deja inclus în offset-ul Box-ului
-                        onClick = { onTileClick(movement.finalRow, movement.col) } // Click pe poziția finală
+                        type = movement.tileType, size = tileSize,
+                        isSelected = (finalPos == selectedTilePosition), isDisappearing = false,
+                        animatedOffset = IntOffset.Zero,
+                        onClick = { onTileClick(movement.finalRow, movement.col) }
                     )
                 }
-            } // --- Sfârșit forEach tileMovements ---
-        } // --- Sfârșit Box container principal ---
+            }
+        }
     }
 }
 
 
-
-// --- Composable pentru Dialogul Shop ---
 @Composable
 fun ShopDialog(
-    cookedMeals: Map<Int, Int>, // Inventarul de mâncare gătită <RecipeId, Quantity>
-    recipesData: List<Recipe>, // Avem nevoie de datele rețetelor pentru nume și preț
-    onSellAll: () -> Unit, // Funcția de apelat la apăsarea "Vinde Tot"
-    onDismiss: () -> Unit // Funcția de apelat la închiderea dialogului
+    cookedMeals: Map<Int, Int>,
+    recipesData: List<Recipe>,
+    onSellAll: () -> Unit,
+    onDismiss: () -> Unit
 ) {
-    // Calculează valoarea totală a mărfii (opțional, pentru afișare)
     var totalValue = 0
     cookedMeals.forEach { (recipeId, quantity) ->
         val recipe = recipesData.find { it.id == recipeId }
-        if (recipe != null) {
-            totalValue += recipe.sellingPrice * quantity
-        }
+        if (recipe != null) { totalValue += recipe.sellingPrice * quantity }
     }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Piața Locală (Magazin)") },
@@ -2025,8 +1519,7 @@ fun ShopDialog(
                 } else {
                     Text("Produse gata de vânzare:")
                     Spacer(modifier = Modifier.height(8.dp))
-                    // Listează produsele gătite
-                    LazyColumn { // Folosim LazyColumn dacă lista poate fi lungă
+                    LazyColumn {
                         items(cookedMeals.entries.toList(), key = { it.key }) { (recipeId, quantity) ->
                             val recipe = recipesData.find { it.id == recipeId }
                             if (recipe != null) {
@@ -2036,14 +1529,11 @@ fun ShopDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        // Iconiță mică a ingredientului principal (sau a rețetei?) - Simplificare: folosim primul ingredient
                                         val firstIngredientId = recipe.ingredientsNeeded.keys.firstOrNull()
                                         val drawableResId = if(firstIngredientId != null) tileDrawables[firstIngredientId] else null
                                         if (drawableResId != null) {
                                             Image(painterResource(id = drawableResId), contentDescription = null, modifier = Modifier.size(24.dp))
-                                        } else {
-                                            Box(Modifier.size(24.dp)) // Placeholder
-                                        }
+                                        } else { Box(Modifier.size(24.dp)) }
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text("${recipe.name} x $quantity")
                                     }
@@ -2059,101 +1549,208 @@ fun ShopDialog(
         },
         confirmButton = {
             Row {
-                Button(
-                    onClick = onSellAll,
-                    enabled = cookedMeals.isNotEmpty() // Activează doar dacă e ceva de vândut
-                ) {
-                    Text("Vinde Tot")
-                }
+                Button(onClick = onSellAll, enabled = cookedMeals.isNotEmpty()) { Text("Vinde Tot") }
                 Spacer(Modifier.width(8.dp))
-                TextButton(onClick = onDismiss) {
-                    Text("Închide")
-                }
+                TextButton(onClick = onDismiss) { Text("Închide") }
             }
         }
     )
 }
 
-// --- Preview-uri  ---
+
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
     Match3PuzzleGameTheme {
-        Match3GameApp()
+        // MODIFICAT: Preview-ul acum arată direct Meniul sau un ecran specific dacă dorești.
+        MainMenuScreen(onNavigateToGame = {}, onNavigateToRecipeBook = {}, onNavigateToUpgrades = {}, onNavigateToShop = {})
+        // Sau pentru a previzualiza harta (cu date mock):
+        // WorldMapScreenPreview()
     }
 }
 
-// --- MODIFICAT/NOU: Ecranul Meniu Principal ---
+// MODIFICAT: `onNavigateToGame` acum duce la WORLD_MAP (s-a specificat în Match3GameApp)
 @Composable
 fun MainMenuScreen(
-    onNavigateToGame: () -> Unit,
+    onNavigateToGame: () -> Unit, // Acesta va fi pentru WORLD_MAP
     onNavigateToRecipeBook: () -> Unit,
     onNavigateToUpgrades: () -> Unit,
     onNavigateToShop: () -> Unit,
-    // onNavigateToMap: () -> Unit, // Pentru viitor
-    // onNavigateToOptions: () -> Unit, // Pentru viitor
-    // onExitGame: () -> Unit // Pentru viitor
 ) {
-    Log.d(TAG, "MainMenuScreen: Composing") // LOG NOU
-
     val context = LocalContext.current
-
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .systemBarsPadding()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().systemBarsPadding().padding(16.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            "Cronicile Culinare",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            "Bucătăria Călătoare",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 32.dp)
-        )
+        Text("Cronicile Culinare", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
+        Text("Bucătăria Călătoare", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 32.dp))
 
         Button(
-            onClick = { playSound(context, R.raw.click); onNavigateToGame() },
+            onClick = { playSound(context, R.raw.click); onNavigateToGame() }, // Navighează la WORLD_MAP
             modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp)
-        ) {
-            Text("Joacă") // Sau "Continuă"
-        }
+        ) { Text("Pornește Aventura") } // MODIFICAT Text Buton
 
         Button(
             onClick = { playSound(context, R.raw.click); onNavigateToRecipeBook() },
             modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp)
-        ) {
-            Text("Carte de Bucate")
-        }
+        ) { Text("Carte de Bucate") }
 
         Button(
             onClick = { playSound(context, R.raw.click); onNavigateToUpgrades() },
             modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp)
-        ) {
-            Text("Atelier Îmbunătățiri")
-        }
+        ) { Text("Atelier Îmbunătățiri") }
 
         Button(
             onClick = { playSound(context, R.raw.click); onNavigateToShop() },
             modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp)
-        ) {
-            Text("Piață (Vinde)")
-        }
+        ) { Text("Piață (Vinde)") }
+    }
+}
 
-        // Butoane Placeholder pentru viitor
-        /*
-        Button(onClick = { /* onNavigateToMap() */ }, modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp), enabled = false) {
-            Text("Harta Lumii (În Curând)")
+
+// NOU: WorldMapScreen Composable
+@OptIn(ExperimentalMaterial3Api::class) // Pentru TopAppBar
+@Composable
+fun WorldMapScreen(
+    allLevels: List<LevelData>,
+    maxUnlockedLevelIndex: Int, // Indexul maxim deblocat în lista allLevels
+    onSelectLevel: (levelIndex: Int) -> Unit,
+    onNavigateToMenu: () -> Unit,
+    onNavigateToRecipeBook: () -> Unit,
+    onNavigateToUpgrades: () -> Unit,
+    playerMoney: Int // Pentru afișare (opțional)
+) {
+    val context = LocalContext.current
+    Log.d(TAG, "WorldMapScreen Composing. Max unlocked index: $maxUnlockedLevelIndex")
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Harta Aventurii Culinare") },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        playSound(context, R.raw.click)
+                        onNavigateToMenu() // Buton pentru a reveni la meniul principal
+                    }) {
+                        Icon(Icons.Filled.Menu, contentDescription = "Meniu Principal")
+                    }
+                },
+                actions = {
+                    // Afișare Bani (similar cu UpgradesScreen)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 8.dp) // Redus padding
+                    ) {
+                        Image(painterResource(id = R.drawable.coin), contentDescription = "Bani", modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(playerMoney.toString(), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold) // Font mai mic
+                    }
+                    // Buton Rețete
+                    IconButton(onClick = { playSound(context, R.raw.click); onNavigateToRecipeBook() }) {
+                        Image(painter = painterResource(id = R.drawable.carte), contentDescription = "Carte de Bucate", modifier = Modifier.size(30.dp))
+                    }
+                    // Buton Upgrade-uri
+                    IconButton(onClick = { playSound(context, R.raw.click); onNavigateToUpgrades() }) {
+                        Image(painter = painterResource(id = R.drawable.upgrade), contentDescription = "Atelier", modifier = Modifier.size(28.dp))
+                    }
+                }
+            )
         }
-        Button(onClick = { /* onNavigateToOptions() */ }, modifier = Modifier.fillMaxWidth(0.7f).padding(vertical = 8.dp), enabled = false) {
-            Text("Opțiuni (În Curând)")
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding) // Aplică padding-ul de la Scaffold
+                .verticalScroll(rememberScrollState()), // Adăugăm scroll dacă nivelele depășesc ecranul
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // TODO: Adaugă o imagine de fundal pentru hartă sau o imagine a autorulotei
+            Image(
+                painter = painterResource(id = R.drawable.map_background_placeholder), // ADAUGĂ o imagine placeholder în drawable
+                contentDescription = "Fundal Hartă",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop // Sau .Fit
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "Alege următoarea destinație pentru 'Le Zeste Mobile'!",
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                if (allLevels.isEmpty()) {
+                    Text("Niciun nivel definit încă.")
+                } else {
+                    allLevels.forEachIndexed { index, levelData ->
+                        val isUnlocked = index <= maxUnlockedLevelIndex
+                        Button(
+                            onClick = {
+                                if (isUnlocked) {
+                                    playSound(context, R.raw.click)
+                                    onSelectLevel(index) // Trimite INDEXUL nivelului
+                                } else {
+                                    playSound(context, R.raw.lost) // Sunet de acțiune invalidă
+                                }
+                            },
+                            enabled = isUnlocked,
+                            modifier = Modifier
+                                .fillMaxWidth(0.8f)
+                                .padding(vertical = 6.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isUnlocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (isUnlocked) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Nivel ${levelData.levelId}: ${levelData.name}")
+                                if (!isUnlocked) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_lock), // ADAUGĂ o iconiță de lacăt în drawable
+                                        contentDescription = "Blocat",
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                // Afișează mesaj dacă toate nivelele sunt completate
+                if (maxUnlockedLevelIndex >= allLevels.size -1 && allLevels.isNotEmpty()){
+                    Spacer(modifier = Modifier.height(20.dp)) // Acest Spacer și Text-ul de mai jos
+                    Text(                                      // sunt acum în Column-ul cu padding orizontal
+                        "Felicitări, Chef! Ai explorat toate destinațiile cunoscute!",
+                        style = MaterialTheme.typography.headlineSmall,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+            }
+
         }
-        */
-        // Poți adăuga și un buton de ieșire dacă dorești, deși pe Android nu e mereu necesar
+    }
+}
+
+// NOU: Preview pentru WorldMapScreen (opțional, pentru dezvoltare)
+@Preview(showBackground = true, widthDp = 380, heightDp = 700)
+@Composable
+fun WorldMapScreenPreview() {
+    Match3PuzzleGameTheme {
+        WorldMapScreen(
+            allLevels = gameLevels.take(4), // Luăm doar primele 4 pentru preview
+            maxUnlockedLevelIndex = 1, // Simulăm că primele 2 sunt deblocate
+            onSelectLevel = {},
+            onNavigateToMenu = {},
+            onNavigateToRecipeBook = {},
+            onNavigateToUpgrades = {},
+            playerMoney = 1230
+        )
     }
 }
